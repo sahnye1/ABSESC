@@ -7,7 +7,13 @@
  * 	  |历史版本      |日期         |修改人     |修改描述
  * 	  |V1.0.0        |2026-08-21   |刘彦军     |1、增加初版RTE参数以及不同层之间的版本控制
  *                                                  2、增加X1灯控制、删除主工程can_init()
-*         |V1.0.0        |2026-08-25   |刘彦军     |1、修改前后桥压力传感器X4_14 X4_15
+ *        |V1.0.0        |2026-08-25   |刘彦军     |1、修改前后桥压力传感器X4_14 X4_15
+ *        |V1.0.0        |2026-8-28    |刘彦军     |1、修改RTEfErrFlash/RTEfErrFlashOutBnd为RTEfErrEEprom/RTEfErrEEpromOutBnd 
+ *        |V1.0.0        |2026-09-05   |刘彦军     |1、去除RTE.c中不同层版本控制定义
+ *        |V1.0.0        |2026-09-10   |刘彦军     |1、增加ABS/ESC/HSA/ASR指示灯控制
+ *        |V1.0.0        |2026-09-14   |刘彦军     |1、修改实现配置配置不同波特率项目功能
+ *        |V1.0.0        |2026-09-16   |刘彦军     |1、增加气压模块前后桥故障码,去除前后/附加桥故障码
+ *                                                 |2、增加ESCM未标定/丢失/低/高电压故障
  **********************************************************************************************/
 #include "RTE.h"
 
@@ -16,7 +22,6 @@
      @Description   This file contains variables that use for different modules.
 ============================================================================================*/
 /*form PSW*/
-uint8_t  RTEPSW_Version[5];     // BCD码: 年、月、日、修改当天版本号，默认: 0x01 
 uint16_t RTEvBat = 0;           //battery voltage fact:0.1 unit:v
 uint16_t RTEvIgn = 0;           //ignition voltage fact:0.1 unit:v
 
@@ -39,7 +44,6 @@ struct PSWErr_Struct RTEfPSWErr;
 /*PSW*/ 
 
 /*form COM*/
-uint8_t  RTECOM_Version[5];                      // BCD码: 年、月、日、修改当天版本号，默认: 0x01 
 uint16_t RTEYawRate = 0;                         //yaw rate fact: 0.01 unit:degree/s offset 30000 direction clockwise: >30000 direction anticlockwise: <30000
 uint16_t RTELatAcc = 0;                          //lateral acceleration fact: 0.01 unit: m/s^2 offset 2100 direction left: >2100 dirction right: <2100
 uint16_t RTELongiAcc = 0;                        //longitudinal acceleration fact: 0.01 unit: m/s^2 offset 2100 direction up: >2100 direction down: <2100
@@ -193,58 +197,57 @@ BINPARA BINPARA0;
 /*COM*/
 
 /*form ASW*/
-uint8_t RTEASW_Version[5];  // BCD码: 年、月、日、修改当天版本号，默认: 0x01
 uint8_t RTEDTC[224]=
 {
-	0X1B,0X03,0X05,0X00,//左前ABS阀故障 //RTEDTC[3]  1 (DTCCNT2EE[0])&0x0F
-	0X1C,0X03,0X05,0X00,//右前ABS阀故障 //RTEDTC[7]  2 (DTCCNT2EE[0]>>4)&0x0F
-	0X1D,0X03,0X05,0X00,//左后ABS阀故障 //RTEDTC[11] 3 (DTCCNT2EE[1])&0x0F
-	0X1E,0X03,0X05,0X00,//右后ABS阀故障 //RTEDTC[15] 4 (DTCCNT2EE[1]>>4)&0x0F
-	0X6D,0XF0,0XE5,0X00,//挂车ABS阀故障 //RTEDTC[19] 5 (DTCCNT2EE[2])&0x0F
+	0X1B,0X03,0X05,0X00,//前桥左ABS阀故障 //RTEDTC[3]  1 (DTCCNT2EE[0])&0x0F
+	0X1C,0X03,0X05,0X00,//前桥右ABS阀故障 //RTEDTC[7]  2 (DTCCNT2EE[0]>>4)&0x0F
+	0X1D,0X03,0X05,0X00,//后桥左ABS阀故障 //RTEDTC[11] 3 (DTCCNT2EE[1])&0x0F
+	0X1E,0X03,0X05,0X00,//后桥右ABS阀故障 //RTEDTC[15] 4 (DTCCNT2EE[1]>>4)&0x0F
+	0X6D,0XF0,0XE5,0X00,//挂车ABS阀故障   //RTEDTC[19] 5 (DTCCNT2EE[2])&0x0F
 
-	0X15,0X03,0X05,0X00,//左前轮速传感器开路或短路故障//RTEDTC[23] 6 (DTCCNT2EE[2]>>4)&0x0F
-	0X15,0X03,0X01,0X00,//左前轮速传感器间隙过大故障  //RTEDTC[27] 7 (DTCCNT2EE[3])&0x0F
-	0X15,0X03,0X0A,0X00,//左前轮速传感器信号不稳故障  //RTEDTC[31] 8 (DTCCNT2EE[3]>>4)&0x0F
+	0X15,0X03,0X05,0X00,//前桥左轮速传感器开路或短路故障//RTEDTC[23] 6 (DTCCNT2EE[2]>>4)&0x0F
+	0X15,0X03,0X01,0X00,//前桥左轮速传感器间隙过大故障  //RTEDTC[27] 7 (DTCCNT2EE[3])&0x0F
+	0X15,0X03,0X0A,0X00,//前桥左轮速传感器信号不稳故障  //RTEDTC[31] 8 (DTCCNT2EE[3]>>4)&0x0F
         
-	0X16,0X03,0X05,0X00,//右前轮速传感器开路或短路故障//RTEDTC[35] 9 (DTCCNT2EE[4])&0x0F
-	0X16,0X03,0X01,0X00,//右前轮速传感器间隙过大故障  //RTEDTC[39] 10 (DTCCNT2EE[4]>>4)&0x0F
-	0X16,0X03,0X0A,0X00,//右前轮速传感器信号不稳故障  //RTEDTC[43] 11 (DTCCNT2EE[5])&0x0F
+	0X16,0X03,0X05,0X00,//前桥右轮速传感器开路或短路故障//RTEDTC[35] 9 (DTCCNT2EE[4])&0x0F
+	0X16,0X03,0X01,0X00,//前桥右轮速传感器间隙过大故障  //RTEDTC[39] 10 (DTCCNT2EE[4]>>4)&0x0F
+	0X16,0X03,0X0A,0X00,//前桥右轮速传感器信号不稳故障  //RTEDTC[43] 11 (DTCCNT2EE[5])&0x0F
         
-	0X17,0X03,0X05,0X00,//左后轮速传感器开路或短路故障//RTEDTC[47] 12 (DTCCNT2EE[5]>>4)&0x0F
-	0X17,0X03,0X01,0X00,//左后轮速传感器间隙过大故障  //RTEDTC[51] 13 (DTCCNT2EE[6])&0x0F
-	0X17,0X03,0X0A,0X00,//左后轮速传感器信号不稳故障  //RTEDTC[55] 14 (DTCCNT2EE[6]>>4)&0x0F
+	0X17,0X03,0X05,0X00,//后桥左轮速传感器开路或短路故障//RTEDTC[47] 12 (DTCCNT2EE[5]>>4)&0x0F
+	0X17,0X03,0X01,0X00,//后桥左轮速传感器间隙过大故障  //RTEDTC[51] 13 (DTCCNT2EE[6])&0x0F
+	0X17,0X03,0X0A,0X00,//后桥左轮速传感器信号不稳故障  //RTEDTC[55] 14 (DTCCNT2EE[6]>>4)&0x0F
         
-	0X18,0X03,0X05,0X00,//右后轮速传感器开路或短路故障//RTEDTC[59] 15 (DTCCNT2EE[7])&0x0F
-	0X18,0X03,0X01,0X00,//右后轮速传感器间隙过大故障  //RTEDTC[63] 16 (DTCCNT2EE[7]>>4)&0x0F
-	0X18,0X03,0X0A,0X00,//右后轮速传感器信号不稳故障  //RTEDTC[67] 17 (DTCCNT2EE[8])&0x0F
+	0X18,0X03,0X05,0X00,//后桥右轮速传感器开路或短路故障//RTEDTC[59] 15 (DTCCNT2EE[7])&0x0F
+	0X18,0X03,0X01,0X00,//后桥右轮速传感器间隙过大故障  //RTEDTC[63] 16 (DTCCNT2EE[7]>>4)&0x0F
+	0X18,0X03,0X0A,0X00,//后桥右轮速传感器信号不稳故障  //RTEDTC[67] 17 (DTCCNT2EE[8])&0x0F
         
-	0X76,0X02,0X0D,0X00,//轮速故障//RTEDTC[71] 18 (DTCCNT2EE[8]>>4)&0x0F
-	0X76,0X02,0X0C,0X00,//超速故障//RTEDTC[75] 19 (DTCCNT2EE[9])&0x0F
+	0X76,0X02,0X0D,0X00,//轮速故障                     //RTEDTC[71] 18 (DTCCNT2EE[8]>>4)&0x0F
+	0X76,0X02,0X0C,0X00,//超速故障                     //RTEDTC[75] 19 (DTCCNT2EE[9])&0x0F
         
 	/*上电瞬间只检测过压故障，上电后检测低压故障和过压故障
 	 * 上电后欠压1秒后，且车速大于7.2km/h可以报欠压故障，
 	 * 上电后过压400毫秒后可以报过压故障
 	 * */
-	0X23,0X03,0X04,0X00,//低压故障 //RTEDTC[79] 20 (DTCCNT2EE[9]>>4)&0x0F
+	0X23,0X03,0X04,0X00,//低压故障                     //RTEDTC[79] 20 (DTCCNT2EE[9]>>4)&0x0F
 
-	0X73,0X02,0X03,0X00,//高压故障 //RTEDTC[83] 21 (DTCCNT2EE[10])&0x0F
-	0X75,0X02,0X0C,0X00,//EEPROM故障          //RTEDTC[87] 22 (DTCCNT2EE[10]>>4)&0x0F
-	0X22,0X03,0X07,0X00,//阀电源（继电器）故障//RTEDTC[91] 23 (DTCCNT2EE[11])&0x0F
-	0X22,0X03,0X05,0X00,//驱动芯片故障        //RTEDTC[95] 24 (DTCCNT2EE[11]>>4)&0x0F
-	0X26,0X03,0X05,0X00,//前桥ASR阀故障 //RTEDTC[99] 25 (DTCCNT2EE[12])&0x0F
+	0X73,0X02,0X03,0X00,//高压故障                     //RTEDTC[83] 21 (DTCCNT2EE[10])&0x0F
+	0X75,0X02,0X0C,0X00,//EEPROM故障                   //RTEDTC[87] 22 (DTCCNT2EE[10]>>4)&0x0F
+	0X22,0X03,0X07,0X00,//阀电源（继电器）故障          //RTEDTC[91] 23 (DTCCNT2EE[11])&0x0F
+	0X22,0X03,0X05,0X00,//驱动芯片故障                 //RTEDTC[95] 24 (DTCCNT2EE[11]>>4)&0x0F
+	0X26,0X03,0X05,0X00,//前桥ASR阀故障                //RTEDTC[99] 25 (DTCCNT2EE[12])&0x0F
 
-	0X27,0X03,0X05,0X00,//后桥ASR阀故障 //RTEDTC[103] 26 (DTCCNT2EE[12]>>4)&0x0F
-	0X28,0X03,0X05,0X00,//附加桥（挂车）ASR阀故障//RTEDTC[107] 27 (DTCCNT2EE[13])&0x0F
-	0X15,0X04,0X05,0X00,//前桥PS故障             //RTEDTC[111] 28 (DTCCNT2EE[13]>>4)&0x0F
-	0X16,0X04,0X05,0X00,//后桥PS故障             //RTEDTC[115] 29 (DTCCNT2EE[14])&0x0F
-	0X12,0XF0,0XED,0X00,//ESC未标定故障          //RTEDTC[119] 30 (DTCCNT2EE[14]>>4)&0x0F
+	0X27,0X03,0X05,0X00,//后桥ASR阀故障                //RTEDTC[103] 26 (DTCCNT2EE[12]>>4)&0x0F
+	0X28,0X03,0X05,0X00,//附加桥（挂车）ASR阀故障      //RTEDTC[107] 27 (DTCCNT2EE[13])&0x0F
+	0X15,0X04,0X05,0X00,//前桥PRS故障                  //RTEDTC[111] 28 (DTCCNT2EE[13]>>4)&0x0F
+	0X16,0X04,0X05,0X00,//后桥PRS故障                   //RTEDTC[115] 29 (DTCCNT2EE[14])&0x0F
+	0X12,0XF0,0XED,0X00,//ESC未标定故障                //RTEDTC[119] 30 (DTCCNT2EE[14]>>4)&0x0F
 
-	0X12,0XF0,0XEC,0X00,//ESC系统故障   //RTEDTC[123] 31 (DTCCNT2EE[15])&0x0F
-	0X0F,0X07,0X0D,0X00,//SAS未标定故障 //RTEDTC[127] 32 (DTCCNT2EE[15]>>4)&0x0F
-	0X0F,0X07,0X0C,0X00,//SAS系统故障   //RTEDTC[131] 33 (DTCCNT2EE[16])&0x0F
+	0X12,0XF0,0XEC,0X00,//ESC系统故障                  //RTEDTC[123] 31 (DTCCNT2EE[15])&0x0F
+	0X0F,0X07,0X0D,0X00,//SAS未标定故障                //RTEDTC[127] 32 (DTCCNT2EE[15]>>4)&0x0F
+	0X0F,0X07,0X0C,0X00,//SAS系统故障                  //RTEDTC[131] 33 (DTCCNT2EE[16])&0x0F
 	/*6S6M*/
-	0X1F,0X03,0X05,0X00,//附加桥左ABS阀故障 //RTEDTC[135] 34 (DTCCNT2EE[16]>>4)&0x0F
-	0X20,0X03,0X05,0X00,//附加桥右ABS阀故障 //RTEDTC[139] 35 (DTCCNT2EE[17])&0x0F
+	0X1F,0X03,0X05,0X00,                              //附加桥左ABS阀故障 //RTEDTC[135] 34 (DTCCNT2EE[16]>>4)&0x0F
+	0X20,0X03,0X05,0X00,                              //附加桥右ABS阀故障 //RTEDTC[139] 35 (DTCCNT2EE[17])&0x0F
 
 	0X19,0X03,0X05,0X00,//附加桥左轮速传感器开路或短路故障//RTEDTC[143] 36 (DTCCNT2EE[17]>>4)&0x0F
 	0X19,0X03,0X01,0X00,//附加桥左轮速传感器间隙过大故障  //RTEDTC[147] 37 (DTCCNT2EE[18])&0x0F

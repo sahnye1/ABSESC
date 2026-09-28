@@ -6,7 +6,7 @@
  *            - 单阀 PWM 波形扫描        (TEST_VALVE_DRV_WAVE)
  *            - RTE 变量 CAN 打印 0x700  (TEST_RTE_CAN_PRINT)
  *            - PSW 变量 CAN 打印 0x710  (TEST_PSW_CAN_PRINT)
- *            - 10ms 节拍翻转 P22.0       (TEST_TICK_DEBUG)
+ *            - 10ms 节拍翻转 X1-9       (TEST_TICK_DEBUG)
  *            - 阀诊断明细输出           (bts724g.h 的 VALVE_DIAG_DEBUG, 非本层开关)
  *
  *          开关全在 test_cfg.h; 三个入口的调用位置约束见 test_deal.h。
@@ -25,6 +25,7 @@
 #include "bts724g.h"
 #include "RTE.h"
 #include "rte_psw.h"
+#include "PSWdebug.h"
 
 /* ========================================================================== */
 /*  阀波形测试 — 排气阀 (前段高) 占空比 5 档扫描, 每段 2.4s, 12s 循环          */
@@ -451,9 +452,7 @@ void TestDeal_Mid(void)
 #endif
 }
 
-#include "PSWdebug.h"   /* 测试用例框架入口 (声明见该头文件) */
-
-/** ⑧.5~⑧.6 CAN 调试上报 + ⑪ 节拍验证 + PSWdebug 用例 (须晚于 PSWDataToRte) */
+/** ⑧.5~⑧.6 CAN 调试上报 + ⑪ 节拍验证 (须晚于 PSWDataToRte) */
 void TestDeal_Late(void)
 {
 #if (TEST_RTE_CAN_PRINT != 0u)
@@ -472,8 +471,7 @@ void TestDeal_Late(void)
     }
 #endif
 
-    /* PSWdebug 测试用例: CAN 下发编号 (RTEfDbgMsgSW3) → 注册 → 每 10ms 周期执行
-     * 位置与老工程 10ms 主处理中 PSWDataToRte() 之后一致 */
+    /* PSWdebug 测试用例: CAN 下发编号 (RTEfDbgMsgSW3) → 注册 → 每 10ms 周期执行 */
     PSWdebug();
 }
 

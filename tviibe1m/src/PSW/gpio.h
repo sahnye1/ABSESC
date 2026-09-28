@@ -140,8 +140,13 @@
 /** @brief GPIO 引脚初始化 (继电器/UB/指示灯/接插件输入, 上电默认状态) */
 void Gpio_Init(void);
 
-/** @brief X1-9 接插件第9脚, 10ms 定时器节拍测试输出 (引脚见 hw_rev.h) */
-//void CtrlX1_9(uint8_t state);
+/** @brief X1-9 接插件第9脚, 10ms 定时器节拍测试输出
+ *
+ *  @note  当前硬件未分配该测试点 (hw_rev.h 中无对应引脚宏), 故暂用空实现宏,
+ *         避免 BSWdebug 测试用例报 "declared implicitly" 警告 + 链接缺符号。
+ *         将来接线后: 在 gpio.c 实现该函数, 并把本宏改回函数声明
+ *         `void CtrlX1_9(uint8_t state);` */
+#define CtrlX1_9(state)     ((void)(state))
 
 /** @brief 读地码 (P8.0): 0=接地 (低有效), 1=悬空/高电平 */
 uint8_t Gpio_DiMaRead(void);
@@ -181,5 +186,11 @@ uint32_t Gpio_ASRRLowSideSt(void);
 /** @brief 低边开关引用计数使能 (前桥 P2.0 被 FA_ASR+TR_ASR 共享) */
 void Gpio_ASRFLowSideEnable(uint8_t enable);
 void Gpio_ASRRLowSideEnable(uint8_t enable);
+
+/** @brief 测试计时标记输出 — P22.0 (电路 LROCN, 后桥左排阀, TCPWM CNT34/LINE34)
+ *  @note  测试用例需在接插件上量高低电平测时序 (10ms 节拍 / EEPROM 读写耗时 / 看门狗超时),
+ *         故首次调用把该阀引脚由 TCPWM 切为 GPIO 推挽输出, 之后直接写电平。切走后该阀不再受
+ *         PWM 控制; ⚠ 测试期间该阀不要接负载, 不切回, 复位后恢复默认。 */
+void TestMark_Ctrl(uint8_t state);
 
 #endif /* GPIO_H */

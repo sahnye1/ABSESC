@@ -27,8 +27,6 @@ extern uint16_t PSWBrkPreX2_7;       /* X2_7脚压力值, kpa */
 extern uint16_t PSWBrkPreX3_10;      /* X3_10脚压力值, kpa */
 extern uint8_t  PSWfErrPreX2_7;      /* X2_7脚压力故障, 0=正常 1=故障 */
 extern uint8_t  PSWfErrPreX3_10;     /* X3_10脚压力故障 */
-extern uint8_t  PSWfErrPreF;         /* 前桥压力故障 */
-extern uint8_t  PSWfErrPreR;         /* 后桥压力故障 */
 
 /* ========================================================================== */
 /*  轮速 (0.1km/h)                                                             */
@@ -146,7 +144,7 @@ extern uint32_t resetReason;     //模块重启的原因
 /**
  * @brief 从各驱动模块刷新 PSW* 中间变量 (每 10ms 主循环调用)
  *
- * @details 按顺序读取 sar1_adc / wheel_speed / sensor_diag / bts724g / cmn
+ * @details 按顺序读取 adc / wheel_speed / bts724g / cmn
  *          的内部状态, 填充所有 PSW* 变量。
  */
 void PSWData_Refresh(void);

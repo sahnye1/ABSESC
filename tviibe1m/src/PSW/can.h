@@ -3,11 +3,10 @@
 
 /**
  * @file    can.h
- * @brief   CAN FD 驱动接口 — Classic CAN 模式 (迁移自老代码 PSW_old/can.h)
+ * @brief   CAN FD 驱动接口 — Classic CAN 模式
  *
- * @details 本文件保留老代码 CAN 驱动接口 + 老 cmn.h 中的 CAN 硬件宏定义,
- *          使 can.c 可自包含编译。对外函数签名与 RTE.h 声明一致。
- *
+ * @details 本文件含 CAN 驱动接口 + CAN 硬件宏定义 (can.c 可自包含编译),
+ *          对外函数签名与 RTE.h 声明一致。
  *          CAN0 = 底盘CAN (CANFD0 Ch1, RX=P0.3 TX=P0.2, J1939)
  *          CAN1 = 私有CAN (CANFD1 Ch0, RX=P14.1 TX=P14.0, 诊断/标定)
  */

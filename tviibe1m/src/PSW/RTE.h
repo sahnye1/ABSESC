@@ -14,7 +14,7 @@
                                     GLOBAL VARIABLES
 ============================================================================================*/
 /*form PSW*/
-extern uint8_t  RTEPSW_Version[5];     // BCD码: 年、月、日、修改当天版本号，默认: 0x01 
+extern uint8_t  RTEPSW_Version[5];     // BCD码: 年、月、日、修改当天版本号(默认初值0x01)  example:0126090501
 extern uint16_t RTEvBat;               //battery voltage fact:0.1 unit:v
 extern uint16_t RTEvIgn;               //ignition voltage fact:0.1 unit:v
 
@@ -129,7 +129,7 @@ typedef struct
 /*PSW*/
 
 /*form COM*/
-extern uint8_t  RTECOM_Version[5];                 // BCD码: 年、月、日、修改当天版本号，默认: 0x01 
+extern uint8_t  RTECOM_Version[5];                 // BCD码: 年、月、日、修改当天版本号(默认初值0x01)  example:0226090501
 extern uint16_t RTEYawRate;                        //yaw rate fact: 0.01 unit:degree/s offset 30000 direction clockwise: >30000 direction anticlockwise: <30000
 extern uint16_t RTELatAcc;                         //lateral acceleration fact: 0.01 unit: m/s^2 offset 2100 direction left: >2100 dirction right: <2100
 extern uint16_t RTELongiAcc;                       //longitudinal acceleration fact: 0.01 unit: m/s^2 offset 2100 direction up: >2100 direction down: <2100
@@ -170,11 +170,6 @@ struct COMErr_Struct
     uint8_t  RTEfErrParkBrkSt                   :1;//error flag 0:no error 1:error
     uint8_t  RTEfErrExternalAccelerationDemand  :1;//error flag 0:no error 1:error
     
-    //ESCMErr
-    uint8_t RTEfErrESCMNoCalib                  :1;//0:calibrated 1:no calibration
-    uint8_t RTEfErrESCM                         :1;//0:no error 1:error
-    uint8_t RTEfErrESCMSgn                      :1;//0:no error 1:error
-
     uint8_t  RTEfErrSASNoCalib                  :1;//SAS system no calibration error flag  0: no error 1: error
     uint8_t  RTEfErrSASLost                     :1;//SAS Module Lost 0:no error 1:error
     uint8_t  RTEfErrSASInner                    :1;//SAS Module signal error 0:no error 1:error
@@ -183,12 +178,20 @@ struct COMErr_Struct
     uint8_t  RTEfErrSASLowVol                   :1;//SAS Module low voltage error 0:no error 1:error    
     uint8_t  RTEfErrSASHiVol                    :1;//SAS Module high voltage error 0:no error 1:error
     
-    uint8_t  RTEfEEC1MsgRxErr                    :1;//EEC1 message receive error 0:no error 1:error
-    uint8_t  RTEfEEC2MsgRxErr                    :1;//EEC2 message receive error 0:no error 1:error
-    uint8_t  RTEfETC2MsgRxErr                    :1;//ETC2 message receive error 0:no error 1:error
-    uint8_t  RTEfETC7MsgRxErr                    :1;//ETC7 message receive error 0:no error 1:error
-    uint8_t  RTEfXBRAEBSMsgRxErr                 :1;//XBRAEBS message receive error 0:no error 1:error
-    uint8_t  RTEfPsToEBSMsgRxErr                 :1;//PsToEBS message receive error 0:no error 1:error
+    uint8_t  RTEfErrESCMNoCalib                 :1;//ESCM system no calibration error flag  0: no error 1: error
+    uint8_t  RTEfErrESCMLost                    :1;//ESCM Module Lost 0:no error 1:error
+    uint8_t  RTEfErrESCMInner                   :1;//ESCM Module signal error 0:no error 1:error
+    uint8_t  RTEfErrESCMCANID                   :1;//ESCM Module CAN ID 0:no error 1:error
+    uint8_t  RTEfErrESCMSgn                     :1;//ESCM Module signal error 0:no error 1:error
+    uint8_t  RTEfErrESCMLowVol                  :1;//ESCM Module low voltage error 0:no error 1:error    
+    uint8_t  RTEfErrESCMHiVol                   :1;//ESCM Module high voltage error 0:no error 1:error
+    
+    uint8_t  RTEfEEC1MsgRxErr                   :1;//EEC1 message receive error 0:no error 1:error
+    uint8_t  RTEfEEC2MsgRxErr                   :1;//EEC2 message receive error 0:no error 1:error
+    uint8_t  RTEfETC2MsgRxErr                   :1;//ETC2 message receive error 0:no error 1:error
+    uint8_t  RTEfETC7MsgRxErr                   :1;//ETC7 message receive error 0:no error 1:error
+    uint8_t  RTEfXBRAEBSMsgRxErr                :1;//XBRAEBS message receive error 0:no error 1:error
+    uint8_t  RTEfPsToEBSMsgRxErr                :1;//PsToEBS message receive error 0:no error 1:error
 };
 
 extern struct COMErr_Struct RTEfCOMErr;
@@ -319,7 +322,7 @@ extern BINPARA BINPARA0;
 /*COM*/
 
 /*form ASW*/
-extern uint8_t RTEASW_Version[5];         // BCD码: 年、月、日、修改当天版本号，默认: 0x01 
+extern uint8_t RTEASW_Version[5];         // BCD码: 年、月、日、修改当天版本号(默认初值0x01)  example:0326090501 
 extern uint8_t RTEDTC[224];
 extern uint8_t RTEfCalib;                 //calibration bin file parameters to ram 0:no configure 1:configure
 extern uint8_t RTEfValWssTestForbit;
@@ -459,26 +462,6 @@ extern uint8_t can0_getMsg(Can_recv_msg_st *recvMsg, uint8_t msgMaxCnt);
  * 返回值：实际接收到报文的接收ID数量
  */
 extern uint8_t can1_getMsg(Can_recv_msg_st *recvMsg, uint8_t msgMaxCnt);
-/* 
- * 功能: ESC标定请求
- */
-extern void SCC3000_calibration_req(void);
-
-/* 
- * 功能: ESC反标定请求
- */
-extern void SCC3000_UnCalibration_req(void);
-
-/* 
- * 功能: ESC标定/反标定结果反馈
- * 返回值：标定/反标定结果
- *        0 - 当前无标定/反标定流程; 
- *        1 - 当前正在标定/反标定; 
- *        2 - 标定/反标定完成并成功; 
- *        3 - 标定/反标定完成并失败;
- */
-extern uint8_t SCC3000_calibration_resp(void);
-
 /*
  * 功能：获取PSW库的版本信息
  * 参数：
@@ -641,6 +624,9 @@ extern void Dcm_vRun(void);//诊断函数
 extern void CANDbgMsgSend(uint32_t id, uint8_t* CANTxPacket);//CAN调试报文发送函数
 
 extern void ABSWLampCtrl(uint8_t state);//ABS报警灯控制 0：off 1:on
+extern void ESCLampCtrl(uint8_t state); //ESC报警灯控制 0：off 1:on
+extern void HSALampCtrl(uint8_t state); //HSA报警灯控制 0：off 1:on
+extern void ASRLampCtrl(uint8_t state); //ASR报警灯控制 0：off 1:on
 /*COM*/
 
 /*form ASW*/

@@ -22,6 +22,6 @@
 #define TEST_VALVE_DRV_WAVE     0u   /* 单阀 PWM 波形扫描 (排气阀 LFO 5 档占空比)      */
 #define TEST_RTE_CAN_PRINT      0u   /* RTE 变量 CAN 打印 (CAN1 0x700, 7 帧轮转, 100ms/帧) */
 #define TEST_PSW_CAN_PRINT      0u   /* PSW 变量 CAN 打印 (CAN1 0x710, 8 帧轮转, 100ms/帧) */
-#define TEST_TICK_DEBUG         0u   /* 10ms 节拍验证: 每 10ms 翻转 P22.0 测试点         */
+#define TEST_TICK_DEBUG         0u   /* 10ms 节拍验证: 每 10ms 翻转 X1-9 测试点         */
 
 #endif /* TEST_CFG_H */

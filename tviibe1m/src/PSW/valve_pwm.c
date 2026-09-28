@@ -3,7 +3,7 @@
  * @brief   TCPWM 电磁阀 PWM 控制实现 (直写寄存器 + 强制 counter 溢出生效)
  *
  * @note    覆盖全部 17 个电磁阀, 统一用 TCPWM0 双比较模式
- *          时钟链: PERI_CLK(80MHz) → ÷800 → 100kHz (10μs/步)
+ *          时钟链: PERI_CLK(40MHz) → ÷400 → 100kHz (10μs/步)
  *          period 范围 1000~50000 → 10ms~500ms
  *          双比较模式: CC0→SET(脉冲起点), CC1→CLEAR(脉冲终点)
  *          SetDuty: 直写 CC0/CC1/PERIOD 后置 counter=period-1,
@@ -142,7 +142,16 @@
 /* ---- PWM 通用参数 ---- */
 /* CC0=脉冲起点, CC1=脉冲终点                                              */
 #define PWM_VALVE_PERIOD                    (1000u - 1u)  /* 默认 period_reg=999    */
-#define PWM_CC0_OFFSET                      5u            /* CC0 基础偏移, 避免 counter=0 race */
+/* "前段高"脉冲起点 = 0 (周期起点): counter 溢出置 SET、CC0 匹配置 CLEAR,
+ * 故高电平从周期开始处立起 (CC0=0 且 CC1 永不匹配时即为恒高基态)。
+ *
+ * ⚠ 2026-09-16 由 5 改为 0 (同步自 RBS_CY_PSW 工程, **台架已确诊, 勿改回非 0**):
+ *   用 5 时"恒高"驱动不成立 —— overflow 已在 counter=0 把输出拉低, 要等 CC0=5 才重新拉高,
+ *   每个周期都在起点丢失一段高电平 → 排气阀实测占空只有 ~70% (6ms高/3ms低循环),
+ *   排气阀(NO)保持不住、保压一路泄漏。改成 0 后 counter=0 处 CC0 的 SET 覆盖 overflow 的
+ *   CLEAR → 真恒高、零毛刺。
+ *   (counter=0 处 SET 优先亦由进气阀 SetDuty(period, cc0_start=0, htime) 出脉冲验证) */
+#define PWM_CC0_OFFSET                      0u            /* CC0 起点 = 周期起点 (前段高)      */
 #define PWM_CC0_DISABLE                     0xFFFEu       /* CC0 很大 → 永不匹配, 恒 LOW       */
 #define PWM_CC1_NEVER                       0xFFFEu       /* CC1 很大 → 永不匹配, 恒 HIGH      */
 
@@ -208,8 +217,10 @@ static const cy_stc_tcpwm_pwm_config_t s_pwm_cfg =
     .runMode            = CY_TCPWM_PWM_CONTINUOUS,
     .period             = PWM_VALVE_PERIOD,
     .period_buff        = 0ul,  .enablePeriodSwap   = false,
-    .compare0           = PWM_CC0_OFFSET,  .enableCompare0Swap  = false,  /* 脉冲起点: 5 */
-    .compare1           = PWM_CC0_OFFSET,  .enableCompare1Swap  = false,  /* 脉冲终点: =CC0 → 无脉冲 */
+    /* 上电初值: CC0/CC1 都设为"永不匹配" → 基态 CLEAR → 全部阀恒低(断电), 上电不会误开通
+     * (不能用 PWM_CC0_OFFSET: 若为 0 会在 counter=0 触发 SET 而上电即开通) */
+    .compare0           = PWM_CC0_DISABLE, .enableCompare0Swap  = false,
+    .compare1           = PWM_CC1_NEVER,   .enableCompare1Swap  = false,
     .interruptSources   = CY_TCPWM_INT_NONE,
     .invertPWMOut       = 0ul,  .invertPWMOutN       = 0ul,
     .killMode           = CY_TCPWM_PWM_STOP_ON_KILL,
@@ -302,6 +313,40 @@ void ValvePwm_Init(void)
 }
 
 /* ========================================================================== */
+/*  PWM 参数幂等缓存                                                            */
+/*                                                                            */
+/*  上层 (ASW/COM) 周期性重复下发相同 period/htime。若每次都写寄存器, 无条件      */
+/*  归零会反复腰斩当前周期 → 实际周期被软件调用间隔钉死 (排气阀 cc0=0 时尤其明显); */
+/*  故在入口做"值未变化则直接 return"的短路, 避免重复重置周期。                   */
+/*                                                                            */
+/*  ⚠ 缓存失效: SetOnOff (开/关阀、检阀、诊断) 会直接改变输出, 必须让缓存失效,    */
+/*     否则随后下发相同参数会被误短路 → 阀不动作。                               */
+/* ========================================================================== */
+
+static uint16_t s_duty_period[VALVE_NUM_TOTAL];
+static uint16_t s_duty_cc0   [VALVE_NUM_TOTAL];
+static uint16_t s_duty_htime [VALVE_NUM_TOTAL];
+static bool     s_duty_valid [VALVE_NUM_TOTAL];
+
+static bool ValvePwm_DutyIsSame(valve_id_t id, uint16_t period,
+                                uint16_t cc0_start, uint16_t high_time)
+{
+    return (s_duty_valid[id] &&
+            (s_duty_period[id] == period)   &&
+            (s_duty_cc0[id]    == cc0_start) &&
+            (s_duty_htime[id]  == high_time));
+}
+
+static void ValvePwm_DutyCacheSave(valve_id_t id, uint16_t period,
+                                   uint16_t cc0_start, uint16_t high_time)
+{
+    s_duty_period[id] = period;
+    s_duty_cc0[id]    = cc0_start;
+    s_duty_htime[id]  = high_time;
+    s_duty_valid[id]  = true;
+}
+
+/* ========================================================================== */
 /*  控制接口                                                                    */
 /*                                                                            */
 /*  SetDuty(period, cc0_start, high_time):                                     */
@@ -309,12 +354,12 @@ void ValvePwm_Init(void)
 /*    再强制 counter 跳到 period-1 → 下拍溢出生效, 零延迟                        */
 /*                                                                            */
 /*    进气阀 (后段高): cc0_start = period-htime, high_time = htime              */
-/*    排气阀 (前段高): cc0_start = OFFSET(5),  high_time = htime              */
+/*    排气阀 (前段高): cc0_start = OFFSET(0, 周期起点), high_time = htime        */
 /*                                                                            */
 /*    高电平=0 → CC0=DISABLE 恒 LOW                                             */
 /*    high_time≥period → CC1 ≥ PERIOD+1 → 恒 HIGH                              */
 /*                                                                            */
-/*  SetOnOff(true)  : CC0=OFFSET, CC1=NEVER → 恒 HIGH (直写,即时生效)            */
+/*  SetOnOff(true)  : CC0=OFFSET(0), CC1=NEVER → 恒 HIGH (真恒高, 无毛刺)         */
 /*  SetOnOff(false) : CC0=DISABLE → 恒 LOW (直写,即时生效)                        */
 /* ========================================================================== */
 
@@ -326,7 +371,18 @@ void ValvePwm_SetDuty(valve_id_t valve_id, uint16_t period,
     volatile stc_TCPWM_GRP_CNT_t* const tcpwm = s_valve_pwm_map[valve_id].tcpwm;
     if (tcpwm == NULL) return;  /* GPIO 阀忽略 */
 
-    if ((period == 0u) || (cc0_start >= period)) return;
+    if ((period == 0u) || (cc0_start >= period))
+    {
+        s_duty_valid[valve_id] = false;     /* 非法参数 → 缓存失效 (不短路后续合法值) */
+        return;
+    }
+
+    /* 幂等短路: 参数与上次下发完全一致 → 不碰寄存器 */
+    if (ValvePwm_DutyIsSame(valve_id, period, cc0_start, high_time))
+    {
+        return;
+    }
+    ValvePwm_DutyCacheSave(valve_id, period, cc0_start, high_time);
 
     if (high_time == 0u)
     {
@@ -375,6 +431,12 @@ void ValvePwm_SetDuty(valve_id_t valve_id, uint16_t period,
 /*    500ms→100ms: cur>新周期 → 自动溢出立即切 (不等 500ms 跑完)                  */
 /*    33%→75%    : cur 已过 SET → 归零, 避免尾巴                                 */
 /*    75%→33%    : cur 未到 SET → 自然衔接, 波形连续                              */
+/*                                                                            */
+/*  ⚠ 已知缺陷 (2026-09-17 分析): 不重置 counter 时, 若"新 CC0 尚未到达"而输出已  */
+/*    处于高电平, 该高电平只能等 CC1 匹配或 overflow 才被清除 → 新高电平时长失效   */
+/*    (例: 500ms/300ms 走到 200ms 时改为 500ms/100ms → 实际高电平 250ms, 非 100ms)。*/
+/*    运行时动态调参请改用 SetDutyLive (立即生效 + 相位连续);                       */
+/*    本函数保留兼容旧调用方。                                                    */
 /* ========================================================================== */
 void ValvePwm_SetDutyNoReset(valve_id_t valve_id, uint16_t period,
                              uint16_t cc0_start, uint16_t high_time)
@@ -384,12 +446,25 @@ void ValvePwm_SetDutyNoReset(valve_id_t valve_id, uint16_t period,
     volatile stc_TCPWM_GRP_CNT_t* const tcpwm = s_valve_pwm_map[valve_id].tcpwm;
     if (tcpwm == NULL) return;  /* GPIO 阀忽略 */
 
-    if ((period == 0u) || (cc0_start >= period)) return;
+    if ((period == 0u) || (cc0_start >= period))
+    {
+        s_duty_valid[valve_id] = false;     /* 非法参数 → 缓存失效 */
+        return;
+    }
+
+    /* 幂等短路: 参数与上次下发完全一致 → 不碰寄存器 */
+    if (ValvePwm_DutyIsSame(valve_id, period, cc0_start, high_time))
+    {
+        return;
+    }
+    ValvePwm_DutyCacheSave(valve_id, period, cc0_start, high_time);
 
     if (high_time == 0u)
     {
-        /* 0% 占空比: CC0 写 0xFFFE → 永不匹配 → 恒 LOW */
+        /* 0% 占空比: 恒 LOW; 并强制溢出让"关阀"立即生效 ——
+         * 否则若当前正处于高电平段, 要等到原 CC1 才拉低 (最坏延迟近一个周期) */
         Cy_Tcpwm_Pwm_SetCompare0(tcpwm, PWM_CC0_DISABLE);
+        Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)(period - 1u));
         return;
     }
 
@@ -417,6 +492,95 @@ void ValvePwm_SetDutyNoReset(valve_id_t valve_id, uint16_t period,
     }
 }
 
+/* ========================================================================== */
+/*  SetDutyLive — 动态调参: 参数立即生效 + 相位连续                              */
+/*                                                                            */
+/*                                                                            */
+/*  【要解决的问题】                                                            */
+/*    运行中改 period/htime 时:                                                 */
+/*      - SetDuty       : 无条件归零 → 立即生效, 但当前脉冲被截断, 相位从头开始    */
+/*      - SetDutyNoReset: 保相位但"新 CC0 未到 + 已是高电平"时高电平延续过久,      */
+/*                        新 htime 失效                                        */
+/*    本函数兼顾: 新参数立即生效, 且 counter 恢复到调用前位置 (相位连续)。          */
+/*                                                                            */
+/*  【实现 (① ② ③ 三步)】                                                       */
+/*    ① 写新参数 + SetCounter(period-1) → 下拍 overflow, 让新周期从 0 建立基态    */
+/*       (CC0=0 时 counter=0 处的 SET 会覆盖 overflow 的 CLEAR → 基态即高)        */
+/*    ② 若原相位落在高电平段 (cc0 ≤ saved < cc1), 补触发一次 CC0(SET)            */
+/*    ③ 恢复 saved → 相位连续; saved 超出新周期时硬件下拍自动溢出从头开始          */
+/*                                                                            */
+/*  【每步之间需要延时 ≥1 拍】: 时钟 100kHz → 1 拍 10μs, 取 11μs                 */
+/*    总耗时 ≤ 4×11μs = 44μs, 仅参数变化时发生 (未变化由幂等短路跳过)。           */
+/* ========================================================================== */
+
+#define PWM_STEP_US     11u     /* ≥1 个 TCPWM 时钟拍 (10μs) */
+
+void ValvePwm_SetDutyLive(valve_id_t valve_id, uint16_t period,
+                          uint16_t cc0_start, uint16_t high_time)
+{
+    if (valve_id >= VALVE_NUM_TOTAL) return;
+
+    volatile stc_TCPWM_GRP_CNT_t* const tcpwm = s_valve_pwm_map[valve_id].tcpwm;
+    if (tcpwm == NULL) return;  /* GPIO 阀忽略 */
+
+    if ((period == 0u) || (cc0_start >= period))
+    {
+        s_duty_valid[valve_id] = false;     /* 非法参数 → 缓存失效 */
+        return;
+    }
+
+    if (ValvePwm_DutyIsSame(valve_id, period, cc0_start, high_time))
+    {
+        return;                             /* 参数未变: 连相位也不该动 */
+    }
+    ValvePwm_DutyCacheSave(valve_id, period, cc0_start, high_time);
+
+    const uint16_t period_reg = (uint16_t)(period - 1u);
+
+    /* 0% 占空比 → 恒低, 无需恢复相位 */
+    if (high_time == 0u)
+    {
+        Cy_Tcpwm_Pwm_SetCompare0(tcpwm, PWM_CC0_DISABLE);
+        Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)period_reg);
+        delay_us(PWM_STEP_US);
+        return;
+    }
+
+    uint16_t cc1 = (uint16_t)(cc0_start + high_time);
+    if (cc1 > period_reg)
+    {
+        cc1 = (uint16_t)(period_reg + 1u);  /* 超出周期 → 恒高, 永不匹配 CLEAR */
+    }
+
+    /* ① 记录原相位 + 写新参数 + 强制溢出建立基态 */
+    const uint32_t saved = Cy_Tcpwm_Pwm_GetCounter(tcpwm);
+
+    Cy_Tcpwm_Pwm_SetPeriod(tcpwm, (uint32_t)period_reg);
+    Cy_Tcpwm_Pwm_SetCompare1(tcpwm, (uint32_t)cc1);
+    Cy_Tcpwm_Pwm_SetCompare0(tcpwm, (uint32_t)cc0_start);
+    Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)period_reg);
+    delay_us(PWM_STEP_US);
+
+    /* ② 原相位应处于高电平段 → 补一次 CC0(SET), 否则恢复 counter 后会缺这段高电平 */
+    if ((saved >= (uint32_t)cc0_start) && (saved < (uint32_t)cc1))
+    {
+        if (cc0_start == 0u)
+        {
+            /* cc0=0: 靠"溢出 → counter=0 时 CC0 匹配"置高 */
+            Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)period_reg);
+        }
+        else
+        {
+            Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)(cc0_start - 1u));
+        }
+        delay_us(PWM_STEP_US);
+    }
+
+    /* ③ 恢复原 counter → 相位连续 (超出新周期时下拍自动溢出, 等同从头开始) */
+    Cy_Tcpwm_Pwm_SetCounter(tcpwm, saved);
+    delay_us(PWM_STEP_US);
+}
+
 void ValvePwm_SetOnOff(valve_id_t valve_id, bool on)
 {
     if (valve_id >= VALVE_NUM_TOTAL) return;
@@ -424,15 +588,26 @@ void ValvePwm_SetOnOff(valve_id_t valve_id, bool on)
     volatile stc_TCPWM_GRP_CNT_t* const tcpwm = s_valve_pwm_map[valve_id].tcpwm;
     if (tcpwm == NULL) return;  /* GPIO 阀忽略 */
 
+    /* 开关操作直接改变输出 → PWM 参数缓存必须失效,
+     * 否则随后下发相同 period/htime 会被幂等短路跳过 → 阀不动作 */
+    s_duty_valid[valve_id] = false;
+
     if (on)
     {
+        /* ⚠ 必须先恢复默认 PERIOD: 本函数用 CC0=PWM_CC0_OFFSET(0) 作为 SET 点、
+         * CC1=NEVER 挡掉 CLEAR, 于是 counter=0 处 CC0 的 SET 覆盖 overflow 的 CLEAR
+         * → 输出为**真正的恒高**。
+         * ⚠ CC0 偏移不能用非 0 值 (旧值 5 会让每个周期起点丢一段高电平: 排气阀实测占空
+         *   只有 ~70%, 6ms高/3ms低循环 → 阀保持不住、保压泄漏; 2026-09-15 台架确诊)。
+         * 若该通道此前被 SetDuty 设过别的周期/占空, 也必须复位 PERIOD 才能保证恒高。 */
+        Cy_Tcpwm_Pwm_SetPeriod(tcpwm, (uint32_t)PWM_VALVE_PERIOD);
         Cy_Tcpwm_Pwm_SetCompare0(tcpwm, PWM_CC0_OFFSET);
         Cy_Tcpwm_Pwm_SetCompare1(tcpwm, PWM_CC1_NEVER);
-        Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)PWM_VALVE_PERIOD);   /* 强制溢出生效, 同老代码 */
+        Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)PWM_VALVE_PERIOD);   /* 强制溢出生效 */
     }
     else
     {
         Cy_Tcpwm_Pwm_SetCompare0(tcpwm, PWM_CC0_DISABLE);
-        Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)PWM_VALVE_PERIOD);   /* 强制溢出生效, 同老代码 */
+        Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)PWM_VALVE_PERIOD);   /* 强制溢出生效 */
     }
 }

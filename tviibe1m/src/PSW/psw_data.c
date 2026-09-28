@@ -2,16 +2,14 @@
  * @file    psw_data.c
  * @brief   PSW 中间变量层 — 驱动 → PSW* → RTE* 数据转发
  *
- * @details PSWData_Refresh() 每 10ms 从各驱动读取内部状态, 写入 PSW* 中间变量。
- *          PSWDataToRte() 读取 PSW* 变量, 经数据验证/掩蔽后写入 RTE 全局变量。
- *          BSWdebug 测试用例直接读取 PSW* 变量。
+ * @details PSWData_Refresh(): 每 10ms 读各驱动内部状态 → 写 PSW*。
+ *          PSWDataToRte():     PSW* 经校验/掩蔽 → 写 RTE*。
  */
 
 #include "psw_data.h"
 #include "RTE.h"
 #include "bts724g.h"
-#include "sar1_adc.h"
-#include "sensor_diag.h"
+#include "adc.h"
 #include "wheel_speed.h"
 
 /* ========================================================================== */
@@ -35,8 +33,7 @@ uint16_t PSWBrkPreX2_7    = 0u;
 uint16_t PSWBrkPreX3_10   = 0u;
 uint8_t  PSWfErrPreX2_7   = 0u;
 uint8_t  PSWfErrPreX3_10  = 0u;
-uint8_t  PSWfErrPreF      = 0u;
-uint8_t  PSWfErrPreR      = 0u;
+
 
 /* ---- 轮速 ---- */
 uint16_t PSWWheelSpeedFL  = 0u;
@@ -98,22 +95,18 @@ uint32_t resetReason;     //模块重启的原因
 /* ========================================================================== */
 void PSWData_Refresh(void)
 {
-    /* ---- 1. VPOWER 电压 (sar1_adc, P7.2 AN10, 继电器后) ---- */
+    /* ---- 1. VPOWER 电压 (adc, P7.2 AN10, 继电器后) ---- */
     PSWvIgn        = Vpower_GetVoltage();   /* 板载仅一路 VPOWER, 无独立电池检测 */
     PSWErrVpwrHi   = Vpower_IsHighAlarm() ? 1u : 0u;
     PSWErrVpwrLo   = Vpower_IsLowAlarm()  ? 1u : 0u;
 
-    /* ---- 2. 压力传感器 (sar1_adc) ---- */
+    /* ---- 2. 压力传感器 (adc) ---- */
     PSWBrkPreX2_7  = Pressure_GetFrontKpa();
     PSWBrkPreX3_10 = Pressure_GetRearKpa();
     PSWfErrPreX2_7 = Pressure_IsFrontFault() ? 1u : 0u;
     PSWfErrPreX3_10 = Pressure_IsRearFault()  ? 1u : 0u;
 
-    /* 前/后桥压力故障 (0: 无故障, 1: 故障) */
-    PSWfErrPreF = PSWfErrPreX2_7;
-    PSWfErrPreR = PSWfErrPreX3_10;
-
-    /* ---- 3. 轮速传感器故障 (sensor_diag) ---- */
+    /* ---- 3. 轮速传感器故障 (adc) ---- */
     /* 通道映射 (按硬件引脚): CH0=P6.4-FL, CH1=P6.5-LR, CH2=P7.0-RR,
      *                       CH3=P7.1-RF, CH4=P7.3-LX, CH5=P7.4-RX        */
     PSWErrWssOpenFL  = g_sensor_fault_status.ch0_fault_open          ? 1u : 0u;  /* CH0 P6.4 FL */
@@ -244,25 +237,25 @@ void PSWDataToRte(void)
         RTEBrkPreX4_14  = (err_front != 0u) ? DATA_INVALID : PSWBrkPreX2_7;
         RTEBrkPreX4_15 = (err_rear  != 0u) ? DATA_INVALID : PSWBrkPreX3_10;
 
-        /* 前/后桥压力故障映射 (根据 RTEfPressCfg) */
-        switch (RTEfPressCfg)
-        {
-        case 0u: case 1u:
-            RTEfPSWErr.RTEfErrPreF = err_front;
-            RTEfPSWErr.RTEfErrPreR = err_front;  break;
-        case 2u: case 3u:
-            RTEfPSWErr.RTEfErrPreF = err_rear;
-            RTEfPSWErr.RTEfErrPreR = err_rear;   break;
-        case 4u:
-            RTEfPSWErr.RTEfErrPreF = err_front;
-            RTEfPSWErr.RTEfErrPreR = err_rear;   break;
-        case 5u:
-            RTEfPSWErr.RTEfErrPreF = err_rear;
-            RTEfPSWErr.RTEfErrPreR = err_front;  break;
-        default:
-            RTEfPSWErr.RTEfErrPreF = err_front;
-            RTEfPSWErr.RTEfErrPreR = err_rear;   break;
-        }
+        // /* 前/后桥压力故障映射 (根据 RTEfPressCfg) */
+        // switch (RTEfPressCfg)
+        // {
+        // case 0u: case 1u:
+        //     RTEfPSWErr.RTEfErrPreF = err_front;
+        //     RTEfPSWErr.RTEfErrPreR = err_front;  break;
+        // case 2u: case 3u:
+        //     RTEfPSWErr.RTEfErrPreF = err_rear;
+        //     RTEfPSWErr.RTEfErrPreR = err_rear;   break;
+        // case 4u:
+        //     RTEfPSWErr.RTEfErrPreF = err_front;
+        //     RTEfPSWErr.RTEfErrPreR = err_rear;   break;
+        // case 5u:
+        //     RTEfPSWErr.RTEfErrPreF = err_rear;
+        //     RTEfPSWErr.RTEfErrPreR = err_front;  break;
+        // default:
+        //     RTEfPSWErr.RTEfErrPreF = err_front;
+        //     RTEfPSWErr.RTEfErrPreR = err_rear;   break;
+        // }
     }
     else
     {

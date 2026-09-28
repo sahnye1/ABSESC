@@ -1,3 +1,25 @@
+/**
+ * @file    can.c
+ * @brief   CAN 通讯驱动 — CAN0/CAN1 (Classic CAN, 500kbps) + 接收中断 + busoff 恢复
+ *
+ * @details 两个实例 (引脚/中断宏定义见 can.h):
+ *            CAN0 = CAN_CHSS (RBS 称"底盘CAN" / ABSESC 称"公共CAN"; J1939): P0.2=TX(P0_2_CANFD0_TTCAN_TX1) P0.3=RX,
+ *                   IRQ canfd_0_interrupts0_1_IRQn → CPUIntIdx1_IRQn (优先级 0)
+ *            CAN1 = CAN_PRVT (RBS 称"私有CAN" / ABSESC 称"调试CAN"; UDS 诊断/标定): P14.0=TX(P14_0_CANFD1_TTCAN_TX0) P14.1=RX,
+ *                   IRQ canfd_1_interrupts0_0_IRQn → CPUIntIdx2_IRQn (优先级 0)
+ *          时钟 40MHz, prescaler=10 → 4MHz, 1bit=8tq → **500kbps** (Classic CAN, 数据场 8 字节)
+ *          收发白名单: 由应用层 can_info_cfg() 配置 (不在白名单内的 ID 不收/不发)
+ *          接收: 中断回调写入 g_canX_recvMsg[] 缓冲, 应用用 canX_getMsg() 批量取走
+ *
+ * @note    ⚠ busoff 恢复依赖 **u1BOE 中断**: SDK 的 Cy_CANFD_Init() 只使能 RX 中断
+ *          (DRXE/RF0NE/RF1NE) 且每次调用都重写 unIE → Bus_Off 状态中断恒为 0 →
+ *          进 busoff 后已无 RX 事件 → 永远恢复不了。
+ *          修复: 在 4 处 Cy_CANFD_Init() 之后补
+ *                CAN_xxx_TYPE->M_TTCAN.unIE.stcField.u1BOE = 1u;
+ *          (can_init 2 处 + busoff_resume 重 init 2 处; 只开 BO, 不开 EW/EP/BEUE)
+ *          2026-09-22 台架验证通过。
+ */
+
 #include "RTE.h"
 #include "can.h"
 #include "cmn.h"
@@ -118,7 +140,7 @@ cy_stc_sysint_irq_t g_can0_irq_cfg = {
 	.isEnabled = true,
  };
 
-/* 调试: 接收中断回调计数 (main_cm4.c CAN_TEST 测试用, 老代码无此变量) */
+/* 调试: CAN0 接收中断回调计数 (main_cm4.c CAN_TEST 测试用) */
 volatile uint32_t g_can0_rx_cb_cnt = 0u;
 volatile uint32_t g_can1_rx_cb_cnt = 0u;
 
@@ -226,6 +248,9 @@ void can0_busoff_resume(void)
 			canCfg.extidFilterConfig.extidFilter = g_can0_extIdFilter;
 			canCfg.extidFilterConfig.extIDANDMask = 0x1fffffff;
 			Cy_CANFD_Init(CAN_CHSS_TYPE, &canCfg);
+			/* 补开 Bus_Off 状态中断: SDK 的 Cy_CANFD_Init 只使能 RX 中断 (DRXE/RF0NE/RF1NE), 且每次调用都会重写 unIE
+			 * 不开此位则 busoff 时无中断 → g_busoff_flag0 恒为 0 → 恢复函数永不动作 */
+			CAN_CHSS_TYPE->M_TTCAN.unIE.stcField.u1BOE = 1u;
 
 			g_busoff_flag0 = 0;
 		}
@@ -282,6 +307,9 @@ void can1_busoff_resume(void)
 			canCfg1.extidFilterConfig.extidFilter = g_can1_extIdFilter;
 			canCfg1.extidFilterConfig.extIDANDMask = 0x1fffffff;
 			Cy_CANFD_Init(CAN_PRVT_TYPE, &canCfg1);
+			/* 补开 Bus_Off 状态中断: SDK 的 Cy_CANFD_Init 只使能 RX 中断 (DRXE/RF0NE/RF1NE), 且每次调用都会重写 unIE
+			 * 不开此位则 busoff 时无中断 → g_busoff_flag0 恒为 0 → 恢复函数永不动作 */
+			CAN_PRVT_TYPE->M_TTCAN.unIE.stcField.u1BOE = 1u;
 
 			g_busoff_flag1 = 0;
 		}
@@ -613,6 +641,9 @@ void can_init(void)
 		canCfg.bitrate.syncJumpWidth = 2u - 1u;	// sjw	 = 2tq
 	}
 	Cy_CANFD_Init(CAN_CHSS_TYPE, &canCfg);
+	/* 补开 Bus_Off 状态中断: SDK 的 Cy_CANFD_Init 只使能 RX 中断 (DRXE/RF0NE/RF1NE), 且每次调用都会重写 unIE
+	 * 不开此位则 busoff 时无中断 → g_busoff_flag0 恒为 0 → 恢复函数永不动作 */
+	CAN_CHSS_TYPE->M_TTCAN.unIE.stcField.u1BOE = 1u;
 
 	canCfg1.rxCallback = can1_rxMsgCallback;
 	canCfg1.sidFilterConfig.numberOfSIDFilters = sizeof(g_can1_stdIdFilter) / sizeof(cy_stc_id_filter_t);
@@ -621,6 +652,9 @@ void can_init(void)
 	canCfg1.extidFilterConfig.extidFilter = g_can1_extIdFilter;
 	canCfg1.extidFilterConfig.extIDANDMask = 0x1fffffff;
 	Cy_CANFD_Init(CAN_PRVT_TYPE, &canCfg1);
+	/* 补开 Bus_Off 状态中断: SDK 的 Cy_CANFD_Init 只使能 RX 中断 (DRXE/RF0NE/RF1NE), 且每次调用都会重写 unIE
+	 * 不开此位则 busoff 时无中断 → g_busoff_flag0 恒为 0 → 恢复函数永不动作 */
+	CAN_PRVT_TYPE->M_TTCAN.unIE.stcField.u1BOE = 1u;
 }
 
 /*

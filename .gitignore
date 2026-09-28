@@ -49,3 +49,7 @@ out_lib/
 Backup*.ewp
 Backup*.ewd
 Backup*.ewt
+
+# IAR ninja 构建产物 (依赖/日志)
+.ninja_deps
+.ninja_log

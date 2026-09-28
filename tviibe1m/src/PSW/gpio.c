@@ -2,12 +2,12 @@
  * @file    gpio.c
  * @brief   GPIO 通用输出/输入控制 (继电器/UB/接插件/指示灯/ASR低边开关)
  *
- * @note    继电器 VPOWER 检测: Gpio_RelayCtrl() 动作后延迟 RELAY_CHECK_DELAY 拍,
- *          由 Gpio_RelayPoll() (每 10ms) 倒计时到期后读 VPOWER 判定开闭。
+ * @note    继电器 VPOWER 检测: Gpio_RelayCtrl() 动作后延迟 RELAY_TICK_DELAY 拍 (3 拍 = 30ms),
+ *          由 Gpio_RelayTick() (每 10ms) 倒计时到期后读 VPOWER 判定开闭。
  */
 
 #include "gpio.h"
-#include "sar1_adc.h"
+#include "adc.h"
 #include "psw_data.h"
 
 /* ---- 地码输入 (P8.0, 低有效: 0=接地 1=悬空) ---- */
@@ -50,13 +50,50 @@ static const cy_stc_gpio_pin_prt_config_t s_gpio_pin_cfg[] = {
 /* ========================================================================== */
 /*  GPIO 引脚初始化 (上电默认状态)                                               */
 /*                                                                            */
-/*  与老代码 gpio_init() 等价: Cy_GPIO_Multi_Pin_Init 遍历数组,                 */
-/*  内部逐条调用 Cy_GPIO_Pin_Init。                                             */
+/*  Cy_GPIO_Multi_Pin_Init 遍历数组, 内部逐条调用 Cy_GPIO_Pin_Init。            */
 /* ========================================================================== */
 void Gpio_Init(void)
 {
     Cy_GPIO_Multi_Pin_Init(s_gpio_pin_cfg,
                            (uint32_t)(sizeof(s_gpio_pin_cfg) / sizeof(s_gpio_pin_cfg[0])));
+}
+
+/* ========================================================================== */
+/*  测试计时标记输出 — P22.0 / 电路 LROCN (后桥左排阀, 接插件 X2-5)               */
+/*                                                                            */
+/*  测试用例需要在接插件上量到高低电平来测时序 (10ms 节拍 / EEPROM 读写耗时 /      */
+/*  看门狗超时), 故首次调用时把该阀引脚由 TCPWM 切为 GPIO 推挽输出; 切走后该阀      */
+/*  不再受 PWM 控制 (TCPWM 内部照常运行, 只是到不了引脚), 由本函数直接驱动。       */
+/*  ⚠ 测试期间这一路会按标记信号通断, 该阀不要接负载; 不切回, 复位后恢复默认。      */
+/* ========================================================================== */
+
+#define TEST_MARK_PORT   GPIO_PRT22
+#define TEST_MARK_PIN    0u
+#define TEST_MARK_HSIOM  P22_0_GPIO
+
+static const cy_stc_gpio_pin_config_t s_test_mark_cfg =
+{
+    .outVal    = 0ul,
+    .driveMode = CY_GPIO_DM_STRONG_IN_OFF,   /* 推挽输出 */
+    .hsiom     = TEST_MARK_HSIOM,
+    .intEdge   = 0ul,
+    .intMask   = 0ul,
+    .vtrip     = 0ul,
+    .slewRate  = 0ul,
+    .driveSel  = 0ul,
+};
+
+void TestMark_Ctrl(uint8_t state)
+{
+    static uint8_t s_test_mark_inited = 0u;
+
+    if (s_test_mark_inited == 0u)
+    {
+        Cy_GPIO_Pin_Init(TEST_MARK_PORT, TEST_MARK_PIN, &s_test_mark_cfg);   /* 首次: 脱离 TCPWM, 切为 GPIO */
+        s_test_mark_inited = 1u;
+    }
+
+    Cy_GPIO_Write(TEST_MARK_PORT, TEST_MARK_PIN, (state != 0u) ? 1u : 0u);
 }
 
 /* ========================================================================== */
@@ -163,7 +200,7 @@ int8_t Gpio_Xn_pin_StaGet(uint8_t xNum, uint8_t xPin)
 /* ========================================================================== */
 /*  ASR 低边开关 (GPIO 输出 + 回读 + 引用计数)                                 */
 /*                                                                            */
-/*  P2.0 = 前桥 (FA_ASR+TR_ASR 共享), P6.2 = 后桥 (DA_ASR 独享)                */
+/*  P2.0 = 前桥 (22口进 原FA_ASR + TR_ASR 共享), P6.2 = 后桥 (22口排 原DA_ASR 独享) */
 /*  引用计数仅在 0↔1 边界切换硬件, 防止重复操作                                  */
 /* ========================================================================== */
 

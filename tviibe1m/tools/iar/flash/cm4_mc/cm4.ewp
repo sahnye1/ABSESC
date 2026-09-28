@@ -828,7 +828,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\src\drivers\crypto\libs\libcrypto_client_cm4_iar.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -1927,7 +1927,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\src\drivers\crypto\libs\libcrypto_client_cm4_iar.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -2562,6 +2562,7 @@
                     <state>$PROJ_DIR$\..\..\..\..\src\system\rev_d</state>
                     <state>$PROJ_DIR$\..\..\..\..\src\PSW</state>
                     <state>$PROJ_DIR$\..\..\..\..\src\PSW\in</state>
+                    <state>$PROJ_DIR$\..\..\..\..\src\PSW\test</state>
                 </option>
                 <option>
                     <name>CCStdIncCheck</name>
@@ -3027,7 +3028,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\src\drivers\crypto\libs\libcrypto_client_cm4_iar.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -4126,7 +4127,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\src\drivers\crypto\libs\libcrypto_client_cm4_iar.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -5227,7 +5228,7 @@
                 </option>
                 <option>
                     <name>IlinkAdditionalLibs</name>
-                    <state>$PROJ_DIR$\..\..\..\..\src\drivers\crypto\libs\libcrypto_client_cm4_iar.a</state>
+                    <state></state>
                 </option>
                 <option>
                     <name>IlinkOverrideProgramEntryLabel</name>
@@ -5654,24 +5655,7 @@
                     <name>$PROJ_DIR$\..\..\..\..\src\drivers\cpu\cy_cpu.h</name>
                 </file>
             </group>
-            <group>
-                <name>crypto</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\crypto\cy_crypto.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\crypto\cy_crypto_common.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\crypto\cy_crypto_config.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\crypto\cy_crypto_config.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\crypto\cy_crypto_server.h</name>
-                </file>
-            </group>
+            
             <group>
                 <name>dma</name>
                 <file>
@@ -5687,24 +5671,8 @@
                     <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\dma\cy_pdma.h</name>
                 </file>
             </group>
-            <group>
-                <name>evtgen</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\evtgen\cy_evtgen.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\evtgen\cy_evtgen.h</name>
-                </file>
-            </group>
-            <group>
-                <name>flash</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\flash\cy_flash.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\src\drivers\flash\cy_flash.h</name>
-                </file>
-            </group>
+            
+            
             <group>
                 <name>gpio</name>
                 <file>
@@ -5714,75 +5682,12 @@
                     <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\gpio\cy_gpio.h</name>
                 </file>
             </group>
-            <group>
-                <name>ipc</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_config.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_drv.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_drv.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_pipe.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_pipe.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_sema.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\ipc\cy_ipc_sema.h</name>
-                </file>
-            </group>
-            <group>
-                <name>lin</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\lin\cy_lin.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\lin\cy_lin.h</name>
-                </file>
-            </group>
-            <group>
-                <name>lvd</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\lvd\cy_lvd.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\lvd\cy_lvd.h</name>
-                </file>
-            </group>
-            <group>
-                <name>mcwdt</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\mcwdt\cy_mcwdt.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\mcwdt\cy_mcwdt.h</name>
-                </file>
-            </group>
-            <group>
-                <name>mpu</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\mpu\cy_mpu.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\mpu\cy_mpu.h</name>
-                </file>
-            </group>
-            <group>
-                <name>prot</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\prot\cy_prot.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\prot\cy_prot.h</name>
-                </file>
-            </group>
+            
+            
+            
+            
+            
+            
             <group>
                 <name>scb</name>
                 <file>
@@ -5816,24 +5721,8 @@
                     <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\scb\cy_scb_uart.h</name>
                 </file>
             </group>
-            <group>
-                <name>smartio</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\smartio\cy_smartio.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\smartio\cy_smartio.h</name>
-                </file>
-            </group>
-            <group>
-                <name>srom</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\srom\cy_srom.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\srom\cy_srom.h</name>
-                </file>
-            </group>
+            
+            
             <group>
                 <name>sysclk</name>
                 <file>
@@ -5843,18 +5732,7 @@
                     <name>$PROJ_DIR$\..\..\..\..\src\drivers\sysclk\cy_sysclk.h</name>
                 </file>
             </group>
-            <group>
-                <name>sysflt</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\sysflt\cy_sysflt.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\sysflt\cy_sysflt.h</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\src\drivers\sysflt\cy_sysflt_config.h</name>
-                </file>
-            </group>
+            
             <group>
                 <name>sysint</name>
                 <file>
@@ -5876,15 +5754,7 @@
                     <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\syslib\iar\cy_syslib_iar.s</name>
                 </file>
             </group>
-            <group>
-                <name>syspm</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\syspm\cy_syspm.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\syspm\cy_syspm.h</name>
-                </file>
-            </group>
+            
             <group>
                 <name>sysreset</name>
                 <file>
@@ -5894,15 +5764,7 @@
                     <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\sysreset\cy_sysreset.h</name>
                 </file>
             </group>
-            <group>
-                <name>sysrtc</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\sysrtc\cy_sysrtc.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\drivers\sysrtc\cy_sysrtc.h</name>
-                </file>
-            </group>
+            
             <group>
                 <name>systick</name>
                 <file>
@@ -5982,42 +5844,10 @@
         </group>
         <group>
             <name>mw</name>
-            <group>
-                <name>button</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\button\cy_button.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\button\cy_button.h</name>
-                </file>
-            </group>
-            <group>
-                <name>flash</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\flash\cy_mw_flash.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\flash\cy_mw_flash.h</name>
-                </file>
-            </group>
-            <group>
-                <name>semihosting</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\semihosting\cy_semihosting.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\semihosting\cy_semihosting.h</name>
-                </file>
-            </group>
-            <group>
-                <name>sw_timer</name>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\sw_timer\cy_sw_tmr.c</name>
-                </file>
-                <file>
-                    <name>$PROJ_DIR$\..\..\..\..\..\common\src\mw\sw_timer\cy_sw_tmr.h</name>
-                </file>
-            </group>
+            
+            
+            
+            
         </group>
         <group>
             <name>PSW</name>
@@ -6028,7 +5858,12 @@
                 </file>
             </group>
             <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\bts724g.c</name>
+                            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\adc.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\adc.h</name>
+            </file><name>$PROJ_DIR$\..\..\..\..\src\PSW\bts724g.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\bts724g.h</name>
@@ -6060,12 +5895,8 @@
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\J1939_Com_Types.h</name>
             </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\p12_1_adc.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\p12_1_adc.h</name>
-            </file>
+            
+            
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\peri_div.h</name>
             </file>
@@ -6084,18 +5915,10 @@
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\rte_psw.h</name>
             </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\sar1_adc.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\sar1_adc.h</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\sensor_diag.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\sensor_diag.h</name>
-            </file>
+            
+            
+            
+            
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\spi_eeprom.c</name>
             </file>
@@ -6121,6 +5944,25 @@
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\wheel_speed.h</name>
             </file>
         </group>
+                        <group>
+            <name>test</name>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\PSWdebug.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\PSWdebug.h</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\test_cfg.h</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\test_deal.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\test_deal.h</name>
+            </file>
+        </group>
+
         <group>
             <name>startup</name>
             <file>
@@ -6296,6 +6138,7 @@
                         <state>$PROJ_DIR$\..\..\..\..\src\drivers</state>
                         <state>$PROJ_DIR$\..\..\..\..\src\system\rev_d</state>
                         <state>$PROJ_DIR$\..\..\..\..\\src\PSW</state>
+                    <state>$PROJ_DIR$\..\..\..\..\src\PSW\test</state>
                     </option>
                     <option>
                         <name>CCStdIncCheck</name>

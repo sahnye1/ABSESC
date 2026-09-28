@@ -41,7 +41,11 @@ static void write_enable(void)
 static uint8_t read_status(void)
 {
     uint8_t tx[2] = { CMD_RDSR, 0x00u }, rx[2];
-    SpiEeprom_Transfer(tx, rx, 2u);
+
+    /* 传输超时 → 返回 0x02 (WEL=1, WIP=0): 与老工程一致,
+     * 保证 WEL/WIP 轮询在通信异常时也能退出, 不会卡死主循环 */
+    if (!SpiEeprom_Transfer(tx, rx, 2u)) return 0x02u;
+
     return rx[1];
 }
 
@@ -101,7 +105,7 @@ void Eeprom_Init(void)
 uint8_t Eeprom_ReadByte(uint16_t addr)
 {
     uint8_t tx[3] = { read_byte_cmd(addr), (uint8_t)addr, 0x00u }, rx[3];
-    SpiEeprom_Transfer(tx, rx, 3u);
+    if (!SpiEeprom_Transfer(tx, rx, 3u)) return 0u;   /* 超时已置故障标志 */
     return rx[2];
 }
 
@@ -110,7 +114,7 @@ bool Eeprom_WriteByte(uint16_t addr, uint8_t data)
     if (!enable_and_check()) return false;
 
     uint8_t tx[3] = { write_byte_cmd(addr), (uint8_t)addr, data }, rx[3];
-    SpiEeprom_Transfer(tx, rx, 3u);
+    if (!SpiEeprom_Transfer(tx, rx, 3u)) return false;
     while (is_busy()) { wd_feed(); }
     return verify_byte(addr, data);
 }
@@ -118,12 +122,17 @@ bool Eeprom_WriteByte(uint16_t addr, uint8_t data)
 void Eeprom_ReadSeq(uint16_t addr, uint8_t *buf, uint16_t len)
 {
     for (uint16_t i = 0u; i < len; i++)
+    {
+        if (PSWfErrEEprom != 0u) { buf[i] = 0u; continue; }   /* 熔断后不再发事务 */
         buf[i] = Eeprom_ReadByte((uint16_t)(addr + i));
+    }
 }
 
 bool Eeprom_WritePage(uint16_t addr, const uint8_t *data, uint8_t len)
 {
     if (len == 0u || len > EEPROM_PAGE_SIZE) return false;
+    /* M95040 页写超出页尾会在页内回卷覆盖 → 禁止跨页 (起点页内偏移 + 长度 ≤ 16) */
+    if (((uint16_t)(addr & 0x0Fu) + (uint16_t)len) > EEPROM_PAGE_SIZE) return false;
     if (!enable_and_check()) return false;
 
     uint8_t tx[2u + EEPROM_PAGE_SIZE], rx[2u + EEPROM_PAGE_SIZE];
@@ -131,7 +140,7 @@ bool Eeprom_WritePage(uint16_t addr, const uint8_t *data, uint8_t len)
     tx[1] = (uint8_t)addr;
     for (uint8_t i = 0u; i < len; i++) tx[2u + i] = data[i];
 
-    SpiEeprom_Transfer(tx, rx, (uint32_t)(2u + len));
+    if (!SpiEeprom_Transfer(tx, rx, (uint32_t)(2u + len))) return false;
     while (is_busy()) { wd_feed(); }
 
     for (uint8_t i = 0u; i < len; i++)
@@ -148,10 +157,12 @@ bool Eeprom_WritePage(uint16_t addr, const uint8_t *data, uint8_t len)
 uint32_t Eeprom_WriteBlock(uint16_t addr, const uint8_t *data, uint32_t len)
 {
     if (len == 0u || data == NULL) return 0u;
+    if ((uint32_t)addr + len > EEPROM_TOTAL_SIZE) return 0u;   /* 容量越界 (同老工程 Eep_Write) */
 
     uint32_t written = 0u;
     while (written < len)
     {
+        if (PSWfErrEEprom != 0u) return 0u;   /* 已熔断 → 中止 (同老工程) */
         uint16_t a       = (uint16_t)(addr + written);
         uint32_t remain  = len - written;
         uint8_t  pageOff = (uint8_t)(a & 0x0Fu);
@@ -178,7 +189,9 @@ uint32_t Eeprom_WriteBlock(uint16_t addr, const uint8_t *data, uint32_t len)
 uint32_t Eeprom_ReadBlock(uint16_t addr, uint8_t *buf, uint32_t len)
 {
     if (len == 0u || buf == NULL) return 0u;
+    if ((uint32_t)addr + len > EEPROM_TOTAL_SIZE) return 0u;   /* 容量越界 (同老工程 Eep_Read) */
     Eeprom_ReadSeq(addr, buf, (uint16_t)len);
+    if (PSWfErrEEprom != 0u) return 0u;   /* 熔断 → 报失败 (同老工程) */
     return len;
 }
 

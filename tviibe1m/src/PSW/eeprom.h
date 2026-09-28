@@ -25,17 +25,23 @@
 /* ========================================================================== */
 /*  分区布局                                                                    */
 /* ========================================================================== */
-#define EEPROM_BOOT_BASE         0x0000u
-#define EEPROM_BOOT_SIZE         32u
-#define EEPROM_PSW_BASE          0x0020u
+/*     ERR_CODE 0x0000   128 B   |   ASW      0x0080   128 B                   */
+/*     PSW      0x0100    32 B   |   COM      0x0120    32 B                   */
+/*     BOOT     0x0140    32 B   |   保留     0x0160   160 B (未分配)           */
+/*                                                                            */
+/*  @note  各区起始与长度均为 16 B 页的整数倍 (不跨页); 已用 0x0000~0x015F      */
+/*         各区相对地址上限 = 本区 SIZE, 越界即置 PSWfErrEEpromOutBnd          */
+#define EEPROM_ERR_CODE_BASE     0x0000u
+#define EEPROM_ERR_CODE_SIZE     128u
+#define EEPROM_ASW_BASE          0x0080u
+#define EEPROM_ASW_SIZE          128u
+#define EEPROM_ASW_CFG_SIZE      128u    /* = ASW_SIZE */
+#define EEPROM_PSW_BASE          0x0100u
 #define EEPROM_PSW_SIZE          32u
-#define EEPROM_COM_BASE          0x0040u
+#define EEPROM_COM_BASE          0x0120u
 #define EEPROM_COM_SIZE          32u
-#define EEPROM_ASW_BASE          0x0060u
-#define EEPROM_ASW_SIZE          416u
-#define EEPROM_ASW_CFG_SIZE      300u
-#define EEPROM_ERR_CODE_OFFSET   300u
-#define EEPROM_ERR_CODE_SIZE     116u
+#define EEPROM_BOOT_BASE         0x0140u
+#define EEPROM_BOOT_SIZE         32u
 
 /* ========================================================================== */
 /*  Low-Level API — 原始字节/页操作                                              */

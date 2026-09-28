@@ -2,21 +2,22 @@
  * @file    peri_div.h
  * @brief   外设时钟分频器编号集中管理 (16-bit 分频器)
  *
- * @details 复刻老代码 (PSW_old/cmn.h peri_clk_div_no_e) 的集中枚举思路:
- *          所有 DIV_16_BIT 分频器编号在此唯一登记, 禁止各模块自行 #define,
+ * @details 所有 DIV_16_BIT 分频器编号在此唯一登记, 禁止各模块自行 #define,
  *          从源头杜绝分频器 index 冲突。
  *
  * @note    硬件资源: PERI_DIV_16_NR = 16 (16-bit 分频器共 #0 ~ #15)
  *
- *          分配表 (2026-09-01 确认):
+ *          时钟基准: PERI_CLK = 40MHz (ECO 8MHz → PLL_OUT 80MHz → ÷2)
+ *
+ *          分配表 (2026-09-03 更正基准 80MHz→40MHz):
  *          ┌───────┬──────────────────────────────┬────────────────────┐
  *          │ index │ 用途                          │ 频率               │
  *          ├───────┼──────────────────────────────┼────────────────────┤
- *          │ #0    │ 阀 PWM (17 路共享)             │ 100kHz (80M/800)   │
- *          │ #1    │ 10ms 定时器                    │ 2MHz   (80M/40)    │
- *          │ #2    │ 轮速 6 通道共享                │ 2MHz   (80M/40)    │
- *          │ #3    │ SAR0 ADC (诊断6CH+压力/VPOWER) │ 26.67MHz (80M/3)   │
- *          │ #4    │ SAR1 ADC (P12.1 0~5V 采集)     │ 26.67MHz (80M/3)   │
+ *          │ #0    │ 阀 PWM (17 路共享)             │ 100kHz (40M/400)   │
+ *          │ #1    │ 10ms 定时器                    │ 2MHz   (40M/20)    │
+ *          │ #2    │ 轮速 6 通道共享                │ 2MHz   (40M/20)    │
+ *          │ #3    │ SAR0 ADC (诊断6CH+压力/VPOWER) │ 20MHz  (40M/2)     │
+ *          │ #4    │ SAR1 ADC (P12.1 0~5V 采集)     │ 20MHz  (40M/2)     │
  *          │ #5~15 │ 空闲                           │ —                  │
  *          └───────┴──────────────────────────────┴────────────────────┘
  *
@@ -35,11 +36,11 @@
 /* ========================================================================== */
 typedef enum
 {
-    DIV16_NO_PWM_VALVE = 0u,   /* 阀 PWM: 17 路共享 100kHz, 80MHz/800 */
-    DIV16_NO_TIMER10MS = 1u,   /* 10ms 定时器: 2MHz, 80MHz/40 */
-    DIV16_NO_WHEEL     = 2u,   /* 轮速 6 通道共享: 2MHz, 80MHz/40 */
-    DIV16_NO_ADC       = 3u,   /* SAR0 ADC (诊断6CH + 压力/VPOWER): 26.67MHz, 80MHz/3 */
-    DIV16_NO_ADC2      = 4u,   /* SAR1 ADC (P12.1 0~5V 采集): 26.67MHz, 80MHz/3 */
+    DIV16_NO_PWM_VALVE = 0u,   /* 阀 PWM: 17 路共享 100kHz, 40MHz/400 */
+    DIV16_NO_TIMER10MS = 1u,   /* 10ms 定时器: 2MHz, 40MHz/20 */
+    DIV16_NO_WHEEL     = 2u,   /* 轮速 6 通道共享: 2MHz, 40MHz/20 */
+    DIV16_NO_ADC       = 3u,   /* SAR0 ADC (诊断6CH + 压力/VPOWER): 20MHz, 40MHz/2 */
+    DIV16_NO_ADC2      = 4u,   /* SAR1 ADC (P12.1 0~5V 采集): 20MHz, 40MHz/2 */
     DIV16_NO_MAX
 } peri_div16_no_e;
 

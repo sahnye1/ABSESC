@@ -5,7 +5,7 @@
  * @details 17 阀 → BTS724G + ValvePwm 映射, RTE 0.1ms → 10μs/步换算。
  *          PWM 双比较模式: CC0→SET(起点) CC1→CLEAR(终点) overflow→CLEAR(基态)
  *          进气阀(后段高): CC0=period-htime, CC1=period
- *          排气/ASR(前段高): CC0=5, CC1=5+htime
+ *          排气/ASR(前段高): CC0=0(周期起点), CC1=htime
  */
 
 #include "RTE.h"
@@ -23,6 +23,19 @@
 /* RTE 0.1ms → ValvePwm 10μs 步数 */
 #define RTE_TO_PWM_STEPS(v)      ((uint16_t)((v) * 10u))
 
+/* RTE 层周期上限 (单位 0.1ms): 5000 = 500ms */
+#define RTE_PERIOD_MAX           5000u
+
+/** @brief RTE 阀控参数钳位 (上限 / 非法关阀 / 占空比钳位)
+ *  @note  无钳位时 htime > period 会使 cc0_start 下溢成大数 → 底层直接 return
+ *         → 阀完全不动作且无任何提示 (静默失效)。 */
+static void Psw_ValActClamp(uint16_t *period, uint16_t *htime)
+{
+    if (*period > RTE_PERIOD_MAX) { *period = RTE_PERIOD_MAX; }   /* 周期上限   */
+    if (*period == 0u)            { *period = 1u; *htime = 0u; }  /* 非法 → 关阀 */
+    else if (*htime > *period)    { *htime  = *period; }          /* 占空比钳位 */
+}
+
 /* ========================================================================== */
 /*  全局/静态状态                                                              */
 /* ========================================================================== */
@@ -34,7 +47,11 @@
 /** @brief 进气阀 PWM (后段高, LOW→HIGH): CC0=period-htime, CC1=period */
 static void Psw_InValAct(valve_id_t vid, uint16_t period, uint16_t htime)
 {
-    if (period == 0u || htime == 0u)
+    if (vid >= VALVE_NUM_TOTAL) return;
+
+    Psw_ValActClamp(&period, &htime);
+
+    if (htime == 0u)
     {
         Bts724g_NotifyValveActive(vid, false);
         Bts724g_SetValve(vid, false);
@@ -46,13 +63,19 @@ static void Psw_InValAct(valve_id_t vid, uint16_t period, uint16_t htime)
     uint16_t cc0_start  = pwm_period - pwm_htime;
 
     Bts724g_NotifyValveActive(vid, true);
-    ValvePwm_SetDutyNoReset(vid, pwm_period, cc0_start, pwm_htime);
+    /* 运行中动态调参: 参数立即生效 + 保持相位连续。
+     * 参数未变化由内部幂等短路直接返回, 不会反复重置周期。 */
+    ValvePwm_SetDutyLive(vid, pwm_period, cc0_start, pwm_htime);
 }
 
-/** @brief 排气/ASR 阀 PWM (前段高, HIGH→LOW): CC0=OFFSET(5), CC1=5+htime */
+/** @brief 排气/ASR 阀 PWM (前段高, HIGH→LOW): CC0=OFFSET(0, 周期起点), CC1=htime */
 static void Psw_OutValAct(valve_id_t vid, uint16_t period, uint16_t htime)
 {
-    if (period == 0u || htime == 0u)
+    if (vid >= VALVE_NUM_TOTAL) return;
+
+    Psw_ValActClamp(&period, &htime);
+
+    if (htime == 0u)
     {
         Bts724g_NotifyValveActive(vid, false);
         Bts724g_SetValve(vid, false);
@@ -63,7 +86,8 @@ static void Psw_OutValAct(valve_id_t vid, uint16_t period, uint16_t htime)
     uint16_t pwm_htime  = RTE_TO_PWM_STEPS(htime);
 
     Bts724g_NotifyValveActive(vid, true);
-    ValvePwm_SetDutyNoReset(vid, pwm_period, PWM_CC0_OFFSET, pwm_htime);
+    /* 同 Psw_InValAct: 立即生效 + 相位连续 (参数未变由幂等短路挡掉) */
+    ValvePwm_SetDutyLive(vid, pwm_period, PWM_CC0_OFFSET, pwm_htime);
 }
 
 /* ========================================================================== */
@@ -126,16 +150,23 @@ int8_t Xn_pin_StaGet(uint8_t xNum, uint8_t xPin) { return Gpio_Xn_pin_StaGet(xNu
 /* ========================================================================== */
 
 /**
- * @brief 初始化 RTEPSW_Version (BCD 码 {年高位, 年低位, 月, 日, 修改当天版本号})
- * @note  定义在 RTE.c (上层维护), 本函数只赋值, 不重复定义。
+ * @brief PSW 层版本号数组 RTEPSW_Version 定义 (唯一定义, 随 PSW 库交付)
+ * @note  由底层 PSW 库定义并维护, 上层不再定义, RTE.h 中仅保留 extern 声明供上层引用。
+ *        底层每次修改按当天日期更新 [1][2][3] = 年月日 BCD 码, [4] = 当天第 N 次修改。
+ */
+uint8_t RTEPSW_Version[5];
+
+/**
+ * @brief 初始化 RTEPSW_Version (BCD 码 {底层01, 年低位, 月, 日, 修改当天版本号})
+ * @note  定义在本文件上方, 由底层 PSW 库维护 (上层不再定义)。
  *        每次修改底层工程按当天日期更新, [4] 为当天第 N 次修改 (次日归 0x01)。
  */
 void RtePsw_VersionInit(void)
 {
-    RTEPSW_Version[0] = 0x20u;   /* 年高位 20 */
+    RTEPSW_Version[0] = 0x01u;   /* 底层01*/
     RTEPSW_Version[1] = 0x26u;   /* 年低位 26 → 2026 */
-    RTEPSW_Version[2] = 0x09u;   /* 月 09 */
-    RTEPSW_Version[3] = 0x28u;   /* 日 28 */
+    RTEPSW_Version[2] = 0x09u;   /* 月 */
+    RTEPSW_Version[3] = 0x28u;   /* 日 */
     RTEPSW_Version[4] = 0x01u;   /* 当天第 1 次修改 */
 }
 
@@ -156,9 +187,9 @@ uint8_t psw_version_get(uint8_t *verStr, uint8_t bufLen)
 /* ========================================================================== */
 
 uint32_t ERR_CODE_write(uint32_t wAddr, uint8_t *data, uint32_t len)
-    { return Eeprom_Write(EEPROM_ASW_BASE, EEPROM_ERR_CODE_OFFSET + wAddr, data, len, EEPROM_ASW_SIZE); }
+    { return Eeprom_Write(EEPROM_ERR_CODE_BASE, wAddr, data, len, EEPROM_ERR_CODE_SIZE); }
 uint32_t ERR_CODE_read(uint32_t rAddr, uint8_t *buf, uint32_t len)
-    { return Eeprom_Read(EEPROM_ASW_BASE, EEPROM_ERR_CODE_OFFSET + rAddr, buf, len, EEPROM_ASW_SIZE); }
+    { return Eeprom_Read(EEPROM_ERR_CODE_BASE, rAddr, buf, len, EEPROM_ERR_CODE_SIZE); }
 
 uint32_t ASW_cfg_write(uint32_t wAddr, uint8_t *data, uint32_t len)
     { return Eeprom_Write(EEPROM_ASW_BASE, wAddr, data, len, EEPROM_ASW_CFG_SIZE); }

@@ -172,7 +172,7 @@ volatile uint32_t               g_systick_ms = 0u;
 /* 应用层上报的"阀使用中"状态 (ValveDiag_Process 跳过工作中的阀) */
 static volatile bool s_valve_active[VALVE_NUM_TOTAL] = { false };
 
-/* 候选值累积器 (3 次上下计数消抖, 老代码风格) */
+/* 候选值累积器 (3 次上下计数消抖) */
 static uint8_t s_open_candidate_count[VALVE_NUM_TOTAL]  = {0};
 static uint8_t s_short_candidate_count[VALVE_NUM_TOTAL] = {0};
 
@@ -379,7 +379,7 @@ bool Bts724g_IsValveActive(valve_id_t valve_id)
 }
 
 /* ========================================================================== */
-/*  诊断 — 阀开路检测 (单阀, 老代码 FarOpenCheck_idle 等价)                      */
+/*  诊断 — 阀开路检测 (单阀)                                                     */
 /*                                                                            */
 /*  有 partner: 开 partner → 读目标阀 ST → Low=正常, High=开路                 */
 /*  独占 ST:    开自身 → 读 ON 态 ST → Low=正常, 全 High=开路                    */
@@ -419,7 +419,7 @@ static void Diag_ValveOpenOne(valve_id_t vid)
         bts724g_asr_lowside_enable(vid, 0u);
     }
 
-    /* 3 次上下计数消抖 (老代码风格) */
+    /* 3 次上下计数消抖 */
     if (is_fault)
     {
         if (s_open_candidate_count[vid] < FAULT_CONFIRM_NEED) s_open_candidate_count[vid]++;
@@ -442,7 +442,7 @@ static void Diag_ValveOpenOne(valve_id_t vid)
 }
 
 /* ========================================================================== */
-/*  诊断 — 阀短路检测 (单阀, 老代码 FarShortCheck_idle 等价)                    */
+/*  诊断 — 阀短路检测 (单阀)                                                    */
 /*                                                                            */
 /*  同组全关 → 仅开 vid → 300μs → 读 FAR → High=短路, Low=正常                   */
 /* ========================================================================== */
@@ -494,7 +494,7 @@ static void Diag_ValveShortOne(valve_id_t vid)
 }
 
 /* ========================================================================== */
-/*  诊断 — 芯片开路检测 (老代码 chp724_error_high_check 等价)                    */
+/*  诊断 — 芯片开路检测 (芯片级)                                                */
 /*                                                                            */
 /*  全部 IN=HIGH → 等 300μs → 两路 ST 均 Low → 芯片开路                         */
 /*  防误报: 芯片上已有 ≥2 阀开路则跳过                                            */
@@ -550,7 +550,7 @@ static void Diag_ChipOpenOne(uint8_t chip)
 }
 
 /* ========================================================================== */
-/*  诊断 — 芯片短路检测 (老代码 chp724_error_low_check 等价)                     */
+/*  诊断 — 芯片短路检测 (芯片级)                                                */
 /*                                                                            */
 /*  全部 IN=LOW → 读 FAR → FAR=Low → 芯片内部短路                                 */
 /* ========================================================================== */
@@ -622,7 +622,7 @@ static void Diag_ChipShortOne(uint8_t chip)
 }
 
 /* ========================================================================== */
-/*  诊断主入口 (每 10ms 调用一次, 40ms 执行 1 步, 老代码 FarErrorCheck_idle 等价) */
+/*  诊断主入口 (每 10ms 调用一次, 40ms 执行 1 步, 4 步轮转)                       */
 /*                                                                            */
 /*  4 步轮转: 开路 → 短路 → 芯片开路 → 芯片短路                                  */
 /*  每步只测 1 个阀/芯片, 带 3 次对称消抖                                         */

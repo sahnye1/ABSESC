@@ -2,14 +2,18 @@
  * @file    spi_eeprom.c
  * @brief   SCB3 SPI 主模式传输层实现 (Low-Level API, 纯轮询, 无中断)
  *
- * @details SCB3 主模式, 2MHz (80MHz ÷5 → 16MHz SCB ÷8 过采样)。
+ * @details SCB3 主模式, 2MHz (40MHz ÷2.5 → 16MHz SCB ÷8 过采样)。
  *          P13.0=MISO, P13.1=MOSI, P13.2=SCK, P13.3=CS(SS0)。
  *          Low-Level API 不依赖中断和 context, 直接操作 FIFO + 状态轮询。
  *
  * @note    High-Level API (Cy_SCB_SPI_Transfer) 需要 ISR 调用
  *          Cy_SCB_SPI_Interrupt() 来搬运 FIFO 数据。
- *          本项目 NVIC 8 个槽已满, 无法为 SPI 分配中断, 因此必须使用
- *          Low-Level API 实现全阻塞传输。
+ *          本模块选用 Low-Level API 的真实理由（2026-09-28 按代码核实订正）：
+ *            ① SPI 传输很短、且在 10ms 任务里同步调用, 全阻塞实现最简单、时序确定;
+ *            ② 不必额外占用中断资源 —— 本工程实际只用了 CPUIntIdx1~3
+ *               (CAN0=CAN_CHSS_IRQ_INDX / CAN1=CAN_PRVT_IRQ_INDX / 10ms 定时器=CPUIntIdx3,
+ *                见 can.h、timer10ms.c), **并非"8 个槽已满"**, 另有空闲中断线可用;
+ *            ③ 无需 context (Cy_SCB_SPI_Init(..., NULL)), 不存在重入问题。
  */
 
 #include "cy_project.h"
@@ -17,6 +21,7 @@
 #include "spi_eeprom.h"
 #include "wd_feed.h"
 #include "cmn.h"
+#include "psw_data.h"       /* PSWfErrEEprom: SPI 超时熔断标志 */
 
 /* ========================================================================== */
 /*  硬件宏                                                                      */
@@ -100,7 +105,7 @@ void SpiEeprom_Init(void)
     Cy_SCB_SPI_Enable(EEP_SCB);
 }
 
-void SpiEeprom_Transfer(uint8_t *tx, uint8_t *rx, uint32_t size)
+bool SpiEeprom_Transfer(uint8_t *tx, uint8_t *rx, uint32_t size)
 {
     volatile uint32_t timeout;
 
@@ -115,7 +120,11 @@ void SpiEeprom_Transfer(uint8_t *tx, uint8_t *rx, uint32_t size)
     while (!Cy_SCB_SPI_IsTxComplete(EEP_SCB))
     {
         wd_feed();
-        if (--timeout == 0u) return;
+        if (--timeout == 0u)
+        {
+            PSWfErrEEprom = 1u;   /* 熔断: 后续 EEPROM 操作直接返回失败 (同老工程) */
+            return false;
+        }
     }
 
     /* 3. 确保 RX FIFO 已收齐 size 个字节 (全双工: TX 完成时 RX 通常也完成,
@@ -124,11 +133,16 @@ void SpiEeprom_Transfer(uint8_t *tx, uint8_t *rx, uint32_t size)
     while (Cy_SCB_SPI_GetNumInRxFifo(EEP_SCB) < size)
     {
         wd_feed();
-        if (--timeout == 0u) return;
+        if (--timeout == 0u)
+        {
+            PSWfErrEEprom = 1u;
+            return false;
+        }
     }
 
     /* 4. 从 RX FIFO 读出全部响应数据 */
     Cy_SCB_SPI_ReadArray(EEP_SCB, rx, size);
+    return true;
 }
 
 /* [] END OF FILE */

@@ -2,8 +2,9 @@
  * @file    wd_feed.h
  * @brief   看门狗喂狗 — 软狗 (WDT) + 硬狗 (GPIO 翻转)
  *
- * @note    独立于 PSW 层, PSW 层自用。
- *          硬狗引脚: P5.0 (与 cmn.h 的 GPIO_WD_IN 一致)。
+ * @note    独立于 PSW 层, PSW 层自用。硬狗引脚 P5.0。
+ *          ⚠ 与 cmn.c 的 wd_feed() 同名 (cmn.c 提供非 inline 版本给外部),
+ *            同一编译单元不要同时包含 cmn.h 与本文件。
  */
 
 #ifndef WD_FEED_H

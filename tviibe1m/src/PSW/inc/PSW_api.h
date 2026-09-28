@@ -58,7 +58,7 @@ void calc_task_time(void);
  *  @return 0=未超时, 非0=ISR 触发累计次数 */
 uint8_t timer_get_count(void);
 
-/** @brief 递减 10ms 定时器超时计数 */
+/** @brief 清零 10ms 定时器计数 */
 void timer_count_dev1(void);
 
 
@@ -121,7 +121,7 @@ void delay_us(uint32_t n);
 /* ========================================================================== */
 /*  CAN 接口 (高层封装)                                                        */
 /*                                                                            */
-/*  CAN 驱动实现见 can.c/can.h (老代码迁移), 对外接口见 RTE.h。*/
+/*  CAN 驱动实现见 can.c/can.h, 对外接口见 RTE.h。              */
 /* ========================================================================== */
 
 /**
@@ -134,7 +134,7 @@ void delay_us(uint32_t n);
 void can_info_cfg(uint8_t canX, uint32_t* canIDList, uint8_t idCount, uint8_t transDirect);
 
 /**
- * @brief 初始化底盘CAN和调试CAN (老代码 can_init 兼容)
+ * @brief 初始化底盘CAN和调试CAN
  * @note  调用前需先 can_info_cfg 配置 ID, can0_bitrate_set 设置波特率
  */
 void can_init(void);

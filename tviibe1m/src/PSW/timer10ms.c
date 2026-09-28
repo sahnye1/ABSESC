@@ -3,14 +3,13 @@
  * @brief   10ms 周期定时器实现
  *
  * @details 本模块处理作为系统心跳的 10ms 周期中断。
- *          ISR 快照六通道捕获数据、递增全局 systick 计数器，
- *          并置位 g_b10msTick 以通知主循环调度器。
+ *          递增全局 systick 计数器, 并置位 g_b10msTick 以通知主循环调度器。
+ *          (轮速采集已改为 PDMA 硬件搬运, 10ms ISR 不再做捕获快照)
  */
 
 #include "cy_project.h"
 #include "cy_device_headers.h"
 #include "timer10ms.h"
-#include "wheel_speed.h"
 #include "bts724g.h"
 #include "psw_data.h"
 #include "peri_div.h"
@@ -27,11 +26,12 @@
 #define TIMER_10MS_IRQ_SRC     tcpwm_0_interrupts_1_IRQn
 #define TIMER_10MS_CLK_DIV     DIV16_NO_TIMER10MS   /* 分频器 #1, 2MHz */
 #define TIMER_10MS_TICKS       10000u          /* 10ms @ 1MHz */
+#define TIMER_10MS_CLK_TARGET_HZ  2000000ul    /* 分频器目标 2MHz, TCPWM ÷2 → 1MHz */
 
 volatile bool    g_b10msTick       = false;
 volatile uint8_t g_timer10msCount  = 0u;
 
-/* 任务计时: TCPWM 计数器快照 + 溢出计数 (0.1ms 单位, 对齐 PSW_EBS) */
+/* 任务计时: TCPWM 计数器快照 + 溢出计数 (单位 0.1ms) */
 static uint32_t s_task_start_counter = 0u;
 static volatile uint32_t s_task_overflow_cnt = 0u;  /* 10ms TC 溢出次数 */
 #define TIMER_10MS_AT_1MHZ    10000u          /* 10ms = 10000 ticks @ 1MHz */
@@ -60,9 +60,8 @@ static const cy_stc_tcpwm_counter_config_t timer10msCfg =
 };
 
 /* ========================================================================== */
-/*  10ms 定时器 ISR — 优先级 1 (最高)                                          */
-/*  职责: 快照六通道捕获数据 + 清零窗口计数器                                  */
-/*        + systick 加 10 + 置位 g_b10msTick                                   */
+/*  10ms 定时器 ISR — 中断优先级 1 (低于 CAN0/CAN1 的 0)                                          */
+/*  职责: systick 加 10 + 10ms 节拍计数 + 置位 g_b10msTick                                     */
 /* ========================================================================== */
 static void Timer10ms_Handler(void)
 {
@@ -70,18 +69,6 @@ static void Timer10ms_Handler(void)
 
     /* 递增 1ms 节拍计数器 (10ms ISR 每次加 10, 供 bts724g 模块使用) */
     g_systick_ms += 10u;
-
-    /* 快照六通道捕获数据并清零窗口计数器 */
-    for (uint32_t i = 0u; i < NUM_CAPTURE_CHANNELS; i++)
-    {
-        g_snapshot[i].cc0        = g_ch[i].cc0;
-        g_snapshot[i].cc0_prev   = g_ch[i].cc0_prev;
-        g_snapshot[i].edgeCount  = g_ch[i].edgeCount;
-        g_snapshot[i].newCapture = g_ch[i].newCapture;
-
-        g_ch[i].edgeCount  = 0u;
-        g_ch[i].newCapture = false;
-    }
 
     g_timer10msCount++;
     s_task_overflow_cnt++;   /* 任务计时溢出计数 */
@@ -98,7 +85,7 @@ void Timer10ms_ISR(void)
 /* ========================================================================== */
 void Timer10ms_Init(void)
 {
-    periph_divider(TIMER_10MS_CLK_SRC, CY_SYSCLK_DIV_16_BIT, TIMER_10MS_CLK_DIV, CAPTURE_CLK_TARGET_HZ);
+    periph_divider(TIMER_10MS_CLK_SRC, CY_SYSCLK_DIV_16_BIT, TIMER_10MS_CLK_DIV, TIMER_10MS_CLK_TARGET_HZ);
 
     Cy_Tcpwm_Counter_Init(TIMER_10MS_CH, &timer10msCfg);
     Cy_Tcpwm_Counter_Enable(TIMER_10MS_CH);
@@ -113,7 +100,7 @@ void Timer10ms_Init(void)
 }
 
 /* ========================================================================== */
-/*  10ms 定时器计数 (对齐 PSW_EBS)                                             */
+/*  10ms 定时器计数 (g_timer10msCount)                                         */
 /* ========================================================================== */
 
 uint8_t timer_get_count(void)
@@ -127,7 +114,7 @@ void timer_count_dev1(void)
 }
 
 /* ========================================================================== */
-/*  任务计时 (TCPWM 计数器快照, 对齐 PSW_EBS)                                   */
+/*  任务计时 (TCPWM 计数器快照)                                                */
 /*                                                                            */
 /*  TCPWM 时钟 1MHz → 1μs/步, 0.1ms=100步                                     */
 /* ========================================================================== */
@@ -145,9 +132,10 @@ void calc_task_time(void)
     uint32_t elapsed;      /* 单位: μs (1MHz 计数器, 1 tick = 1μs) */
     uint32_t time_01ms;
 
-    /* 先读溢出次数再读计数器 (与老代码 g_int_count 顺序一致)。
-     * elapsed = 完整 10ms 周期数 × 10000 + 残余 tick。
-     * 支持跨多个 10ms 周期, 不再退化为单次 wrap。 */
+    /* 按是否跨 10ms wrap 分两式算 elapsed (计数器 10000 步溢出一次):
+     *   未跨 wrap: 溢出次数 × 10000 + (末 - 始)
+     *   已跨 wrap: (溢出次数 - 1) × 10000 + (10000 - 始) + 末
+     * 支持一次任务跨多个 10ms 周期。 */
     if (end_counter >= s_task_start_counter)
     {
         elapsed = overflow * TIMER_10MS_TICKS + (end_counter - s_task_start_counter);
