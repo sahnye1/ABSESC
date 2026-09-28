@@ -5858,12 +5858,13 @@
                 </file>
             </group>
             <file>
-                            <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\adc.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\adc.h</name>
-            </file><name>$PROJ_DIR$\..\..\..\..\src\PSW\bts724g.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\bts724g.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\bts724g.h</name>
