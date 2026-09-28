@@ -134,8 +134,8 @@ void RtePsw_VersionInit(void)
 {
     RTEPSW_Version[0] = 0x20u;   /* 年高位 20 */
     RTEPSW_Version[1] = 0x26u;   /* 年低位 26 → 2026 */
-    RTEPSW_Version[2] = 0x08u;   /* 月 08 */
-    RTEPSW_Version[3] = 0x22u;   /* 日 22 */
+    RTEPSW_Version[2] = 0x09u;   /* 月 09 */
+    RTEPSW_Version[3] = 0x28u;   /* 日 28 */
     RTEPSW_Version[4] = 0x01u;   /* 当天第 1 次修改 */
 }
 
