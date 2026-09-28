@@ -1,0 +1,299 @@
+﻿/**
+ * @file    bts724g.h
+ * @brief   BTS724G 五片阀驱动器 (IN 控制 + ST 回读 + 短路检测)
+ *
+ * @details 本模块同时处理诊断: ValveDiag_Process() 每 10ms 测试 1 个阀，
+ *          覆盖全部 17 个空闲阀仅需 170ms。
+ *          基于轮询: 每 ~1.25μs 读取 ST/FAR，5 次连续确认。
+ *
+ * @details 硬件连接 (5 片 BTS724G, 控制 17 个 24V 电磁阀):
+ *
+ *   所有 INx 串联 2k/0603 电阻 (限流)
+ *   所有 STx 串联 2k/0603 + 5.1k/0603 上拉到 VCC (5V)
+ *   STx GPIO 配置: HIGHZ (禁止 PULLUP，分压器会将电平推入阈值灰区)
+ *
+ *   芯片 1 后桥 U6 (RRI/RRO/LRO/LRI):
+ *     IN1=RRI  P22.2    IN2=RRO  P22.1
+ *     IN3=LRO  P22.0    IN4=LRI  P21.5
+ *     ST1/2 → P5.3 (ST1)  ST3/4 → P5.2 (ST2)
+ *
+ *   芯片 2 前桥 U9 (RFI/RFO/LFO/LFI):
+ *     IN1=RFI  P0.0     IN2=RFO  P23.4
+ *     IN3=LFO  P23.3    IN4=LFI  P22.3
+ *     ST1/2 → P6.0 (ST3)  ST3/4 → P6.1 (ST4)
+ *
+ *   芯片 3 ASR U12 (TRFIN/TRFOUT/TR_ASR):
+ *     IN1=TRFIN  P19.1  IN2=TRFOUT P19.0
+ *     IN3=TR_ASR P18.6  IN4=NC (但 IN3+IN4 并联驱动同一线圈)
+ *     ST1/2 → P2.3 (ST5)  ST3/4 → P2.2 (ST6)  (TR_ASR 独占 ST34)
+ *
+ *   芯片 4 ASR U13 (FA_ASR/DA_ASR, IN3/IN4 未用):
+ *     IN1=FA_ASR P18.3   IN2=DA_ASR P18.5
+ *     ST1/2 → P0.1 (ST7)  ST3/4 不用
+ *
+ *   芯片 5 辅助桥 U19 (RXI/RXO/LXO/LXI):
+ *     IN1=RXI  P21.1    IN2=RXO  P21.0
+ *     IN3=LXO  P19.3    IN4=LXI  P19.2
+ *     ST1/2 → P14.2 (ST9) ST3/4 → P3.1 (ST10)
+ *
+ *   外部短路检测电路 (汇聚型, 2 个 GPIO):
+ *     A 组: U6(4) + U9(4) = 8 阀 → FAR_CK2 (P11.1)
+ *     B 组: U19(4) + U12(3) + U13(2) = 9 阀 → FAR_CK (P17.2)
+ *
+ *      0  VALVE_RRI     后桥右进气阀   U6 IN1    后桥
+ *      1  VALVE_RRO     后桥右排气阀   U6 IN2    后桥
+ *      2  VALVE_LRO     后桥左排气阀   U6 IN3    后桥
+ *      3  VALVE_LRI     后桥左进气阀   U6 IN4    后桥
+ *      4  VALVE_RFI     前桥右进气阀   U9 IN1    前桥
+ *      5  VALVE_RFO     前桥右排气阀   U9 IN2    前桥
+ *      6  VALVE_LFO     前桥左排气阀   U9 IN3    前桥
+ *      7  VALVE_LFI     前桥左进气阀   U9 IN4    前桥
+ *      8  VALVE_TRFIN    TRFIN 阀      U12 IN1   ASR
+ *      9  VALVE_TRFOUT   TRFOUT 阀     U12 IN2   ASR
+ *     10  VALVE_TR_ASR   TR_ASR 阀     U12 IN3   ASR (IN3+IN4并联)
+ *     11  VALVE_FA_ASR   FA_ASR 阀     U13 IN1   ASR
+ *     12  VALVE_DA_ASR   DA_ASR 阀     U13 IN2   ASR
+ *     13  VALVE_RXI      辅助桥右进气阀 U19 IN1   辅助桥
+ *     14  VALVE_RXO      辅助桥右排气阀 U19 IN2   辅助桥
+ *     15  VALVE_LXO      辅助桥左排气阀 U19 IN3   辅助桥
+ *     16  VALVE_LXI      辅助桥左进气阀 U19 IN4   辅助桥
+ */
+
+#ifndef BTS724G_H
+#define BTS724G_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+/* ========================================================================== */
+/*  常量定义                                                                   */
+/* ========================================================================== */
+#define VALVE_NUM_TOTAL             17u     /* 电磁阀总数 */
+#define BTS724G_NUM_CHIPS           5u      /* BTS724G 芯片数 */
+#define BTS724G_NUM_CH_PER_CHIP     4u      /* 每片最大通道数 */
+
+/* ========================================================================== */
+/*  阀名枚举                                                                   */
+/*                                                                            */
+/*  命名规则:                                                                  */
+/*    R/L  = 右/左                                                             */
+/*    F    = 前桥                                                              */
+/*    X    = 辅助桥                                                            */
+/*    第二个R = 后桥                                                            */
+/*    I/O  = 进气/排气                                                         */
+/* ========================================================================== */
+
+typedef enum
+{
+    /* 芯片 1 (U6): 后桥阀 */
+    VALVE_RRI    = 0u,   /* 后桥右进气阀 */
+    VALVE_RRO    = 1u,   /* 后桥右排气阀 */
+    VALVE_LRO    = 2u,   /* 后桥左排气阀 */
+    VALVE_LRI    = 3u,   /* 后桥左进气阀 */
+    /* 芯片 2 (U9): 前桥阀 */
+    VALVE_RFI    = 4u,   /* 前桥右进气阀 */
+    VALVE_RFO    = 5u,   /* 前桥右排气阀 */
+    VALVE_LFO    = 6u,   /* 前桥左排气阀 */
+    VALVE_LFI    = 7u,   /* 前桥左进气阀 */
+    /* 芯片 3 (U12): ASR */
+    VALVE_TRFIN  = 8u,   /* TRFIN 阀 */
+    VALVE_TRFOUT = 9u,   /* TRFOUT 阀 */
+    VALVE_TR_ASR = 10u,  /* TR_ASR 阀 (IN3+IN4 并联驱动) */
+    /* 芯片 4 (U13): ASR */
+    VALVE_FA_ASR = 11u,  /* FA_ASR 阀 */
+    VALVE_DA_ASR = 12u,  /* DA_ASR 阀 */
+    /* 芯片 5 (U19): 辅助桥阀 */
+    VALVE_RXI    = 13u,  /* 辅助桥右进气阀 */
+    VALVE_RXO    = 14u,  /* 辅助桥右排气阀 */
+    VALVE_LXO    = 15u,  /* 辅助桥左排气阀 */
+    VALVE_LXI    = 16u,  /* 辅助桥左进气阀 */
+} valve_id_t;
+
+/* ========================================================================== */
+/*  故障状态结构体 (开路已实现, 短路由外部电路填充)                             */
+/* ========================================================================== */
+
+typedef enum
+{
+    VALVE_FAULT_NONE  = 0u,   /* 无故障 */
+    VALVE_FAULT_OPEN  = 1u,   /* 开路 (线圈断线) */
+    VALVE_FAULT_SHORT = 2u,   /* 短路 (由外部电路填充) */
+} bts724g_fault_type_t;
+
+typedef struct
+{
+    bool bts724g_fault_open[VALVE_NUM_TOTAL];    /* 开路故障 (本模块实现) */
+    bool bts724g_fault_short[VALVE_NUM_TOTAL];   /* 短路故障 (由 FAR_CK 电路填充) */
+    bts724g_fault_type_t bts724g_fault_type[VALVE_NUM_TOTAL];  /* 综合故障类型 */
+    bts724g_fault_type_t bts724g_chip_fault_type[BTS724G_NUM_CHIPS]; /* 芯片级故障: 全阀同类型才报 */
+    uint8_t              bts724g_chip_any_fault;                     /* 任一芯片有故障标志 (psw_data 读) */
+} bts724g_fault_status_t;
+
+/* 全局故障状态 (外部模块读取, ValveDiag_Process() 写入) */
+extern volatile bts724g_fault_status_t g_bts724g_fault_status;
+
+/* SysTick 1ms 节拍计数器 (main_cm4.c Timer10ms_Handler 维护, 每 10ms 加 10) */
+extern volatile uint32_t g_systick_ms;
+
+/* ========================================================================== */
+/*  对外 API                                                                   */
+/* ========================================================================== */
+
+/**
+ * @brief   初始化所有 BTS724G GPIO 引脚。
+ *          INx → 推挽输出 (初始 Low, 阀关闭)
+ *          STx → 数字输入 + 外部 5.1k 上拉到 VCC (MCU 设为 HIGHZ, 不使用内部 PULLUP)
+ */
+void Bts724g_Init(void);
+
+/**
+ * @brief   设置阀的开关状态 (正常运行中调用)。
+ * @param   valve_id  阀索引 (valve_id_t)
+ * @param   on         true = 打开, false = 关闭
+ */
+void Bts724g_SetValve(valve_id_t valve_id, bool on);
+
+/**
+ * @brief   查询阀的开路故障状态。
+ * @param   valve_id  阀索引 (valve_id_t)
+ * @return  true = 开路故障, false = 正常
+ */
+bool Bts724g_IsOpenFault(valve_id_t valve_id);
+
+/**
+ * @brief   查询阀的短路故障状态 (由外部电路填充)。
+ * @param   valve_id  阀索引 (valve_id_t)
+ * @return  true = 短路故障, false = 正常
+ */
+bool Bts724g_IsShortFault(valve_id_t valve_id);
+
+/**
+ * @brief   外部短路信号入口 (由外部短路检测电路调用)。
+ *
+ * @details 当外部短路检测电路判定某阀短路时，调用此函数填充故障状态。
+ *
+ * @param[in] valve_id  阀索引
+ * @param[in] is_short  true = 检测到短路, false = 短路已清除
+ */
+void Bts724g_ReportExternalShort(valve_id_t valve_id, bool is_short);
+
+/**
+ * @brief   读取 BTS724G ST 引脚电平 (诊断用, 阀必须处于 ON 状态)。
+ *
+ * @details BTS724G ST 为开漏输出 (线与), 两个通道共享一个 ST 组。
+ *          本函数自动查表 g_bts724g_valve_map 找到对应芯片和 ST 组。
+ *          ST=High → 正常, ST=Low → 开路故障 (或对地短路)。
+ *
+ * @param   valve_id  阀索引
+ * @return  true = ST High (正常), false = ST Low (故障)
+ */
+bool Bts724g_ReadST(valve_id_t valve_id);
+
+/**
+ * @brief   通知本模块阀的"使用中"状态 (由应用层调用)。
+ *
+ * @details ValveDiag_Process() 选择诊断阀时会跳过所有 active=true 的阀。
+ *          应用层在调用 Bts724g_SetValve(vid, on) 的同时调用本函数即可，
+ *          无需考虑时序，仅检查最新通知值。
+ *
+ * @param   valve_id  阀索引
+ * @param   active    true = 阀工作中 (跳过诊断), false = 空闲 (可诊断)
+ */
+void Bts724g_NotifyValveActive(valve_id_t valve_id, bool active);
+
+/**
+ * @brief   查询本模块记录的"阀使用中"标志。
+ * @param   valve_id  阀索引
+ * @return  true = 应用层已通知该阀正在工作
+ */
+bool Bts724g_IsValveActive(valve_id_t valve_id);
+
+/* ========================================================================== */
+/*  运行时诊断 (无状态, 主循环每 10ms 调用一次)                                 */
+/* ========================================================================== */
+
+/**
+ * @brief   阀诊断主函数 (非阻塞, 主循环每 10ms 调用一次)。
+ *
+ * @details 每 10ms 测试 1 个空闲阀。轮询 ~1.25μs/次, 每阶段最大 ~312μs。
+ *          全部 17 个空闲阀覆盖只需 170ms。
+ *          两次调用间的 10ms 间隔确保线圈充分放电。
+ */
+void ValveDiag_Process(void);
+
+/* ========================================================================== */
+/*  调试快照开关 (用于 Live Watch)                                             */
+/*                                                                            */
+/*  1 = 启用 ValveDiag_DebugDump() 和 g_valve_diag_debug                       */
+/*  0 = 发布版本编译时移除                                                      */
+/*                                                                            */
+/*  切换方法:                                                                  */
+/*    IAR: Project → Options → C/C++ Compiler → Preprocessor                   */
+/*          在 Defined symbols 中添加 VALVE_DIAG_DEBUG=1                       */
+/*    或: 直接修改下面的 #ifndef 默认值                                        */
+/* ========================================================================== */
+#ifndef VALVE_DIAG_DEBUG
+#define VALVE_DIAG_DEBUG   0u   /* 默认 1: 开启调试; 发布时改为 0 */
+#endif
+
+#if (VALVE_DIAG_DEBUG != 0u)
+typedef struct {
+    uint32_t systick_ms;                    /* g_systick_ms 快照              */
+    uint8_t  reserved;                      /* 保留 (原 step, 现恒为 0)       */
+    uint8_t  vid;                           /* 当前被测阀 (0~16)              */
+    uint8_t  st_on_raw[3];                  /* ON 态 3 次 ST 读取 (短检用)    */
+    uint8_t  st_off_raw[3];                 /* OFF 态 3 次 ST 读取 (开检用)   */
+    uint8_t  far_high;                      /* 最近 FAR 判定 (1=High/短路)    */
+    uint8_t  far_hi_max;                    /* 保留 (原最大连续 High 次数)     */
+    uint8_t  far_scan_count;                /* 最近扫描总读数次数              */
+    uint8_t  far_raw_a;                     /* FAR_CK2 P11.1 即时电平 (0/1)  */
+    uint8_t  far_raw_b;                     /* FAR_CK  P17.2 即时电平 (0/1)  */
+    uint8_t  active[VALVE_NUM_TOTAL];       /* s_valve_active 镜像            */
+    uint32_t call_count;                    /* 累计调用次数 (心跳)            */
+} valve_diag_debug_t;
+
+extern volatile valve_diag_debug_t g_valve_diag_debug;
+void ValveDiag_DebugDump(void);
+#endif /* VALVE_DIAG_DEBUG */
+
+/* ========================================================================== */
+/*  短路检测 (基于 FAR_CK / FAR_CK2 汇聚电路)                                  */
+/*                                                                            */
+/*  电路原理 (参见原理图):                                                     */
+/*    A 组: U6(4阀)+U9(4阀)=8阀 → FAR_CK2 (P11.1)                            */
+/*    B 组: U19(4阀)+U12(3阀)+U13(2阀)=9阀 → FAR_CK (P17.2)                  */
+/*                                                                            */
+/*  单阀 ON (其余 OFF) 时:                                                     */
+/*    - 正常 ON: 三极管饱和导通 → FAR_CK = Low (~0.27V)                         */
+/*    - 对地短路: 三极管截止 → FAR_CK = High (~3V)                             */
+/*                                                                            */
+/*  检测: GPIO 数字输入 (TTL 阈值: VIH=2.0V, VIL=0.8V)                         */
+/*    开阀 → 300μs 稳定 → 每 6μs GPIO 读一次, 共 5 次 (首次命中跳出)             */
+/*    连续 5 次 High → 疑似短路；任一 Low 重置计数。                            */
+/* ========================================================================== */
+
+typedef enum
+{
+    SHORT_GROUP_A = 0u,   /* A 组: P11.1 (FAR_CK2), U6+U9 共 8 阀 */
+    SHORT_GROUP_B = 1u,   /* B 组: P17.2 (FAR_CK),  U19+U12+U13 共 9 阀 */
+    SHORT_GROUP_NUM
+} short_group_id_t;
+
+/* GPIO 引脚: 9013 集电极 → MCU 数字输入 (TTL 阈值) */
+#define FAR_GPIO_PORT_A         GPIO_PRT11      /* P11.1 = FAR_CK2, A 组 */
+#define FAR_GPIO_PIN_A          1u
+#define FAR_GPIO_PORT_B         GPIO_PRT17      /* P17.2 = FAR_CK,  B 组 */
+#define FAR_GPIO_PIN_B          2u
+
+/**
+ * @brief   初始化 P11.1 / P17.0 为 GPIO 数字输入 (TTL 阈值, HIGHZ)。
+ */
+void ValveShort_Init(void);
+
+/**
+ * @brief   GPIO 读取短路组的 FAR_CK 电平。
+ * @return  true = High (疑似短路), false = Low (正常)
+ */
+bool ValveShort_ReadGroup(short_group_id_t group);
+
+#endif /* BTS724G_H */
