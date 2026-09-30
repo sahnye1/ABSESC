@@ -53,3 +53,16 @@ Backup*.ewt
 # IAR ninja 构建产物 (依赖/日志)
 .ninja_deps
 .ninja_log
+
+# ===== IAR IDE 会话 / 调试临时文件 (每台机器各不同) =====
+*.cspy.bat
+*.cspy.ps1
+*.crun
+*.dbgdt
+*.dnx
+*.wsdt
+*.jlink
+cspycomm.log
+.cm4_build_cache
+*_EditorBookmarks.xml
+*_EncodingOverride.xml
