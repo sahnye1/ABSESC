@@ -30,7 +30,7 @@
 
 /* GPIO 轮询参数 */
 #define VALVE_ON_SETTLE_US  320u   /* BTS724G 输出通道开通建立时间 */
-#define LOWSIDE_SETTLE_US   300u   /* 低边开关开通→芯片上电稳定时间 */
+#define LOWSIDE_SETTLE_US   300u   /* 低边开关开通→芯片上电稳定时间 (低边已改为上电常开, 此宏暂未使用) */
 #define CHIP_SETTLE_US        3u   /* 芯片检测 IN 切换稳定时间 */
 
 /* ========================================================================== */
@@ -202,28 +202,8 @@ static bool ReadST(uint8_t chip, uint8_t st_group)
 extern void ASRFLowSideEnable(uint8_t enable);
 extern void ASRRLowSideEnable(uint8_t enable);
 
-/** @brief ASR 低边开关映射 — 所有 ASR/挂车/辅助桥阀共享 P2.0 (前 ASR) */
-static void bts724g_asr_lowside_enable(valve_id_t vid, uint8_t enable)
-{
-    switch (vid)
-    {
-    case VALVE_FA_ASR:
-    case VALVE_TR_ASR:
-    case VALVE_TRFIN:
-    case VALVE_TRFOUT:
-    case VALVE_RXI://后续注释
-    case VALVE_RXO://后续注释
-    case VALVE_LXO://后续注释
-    case VALVE_LXI://后续注释
-        ASRFLowSideEnable(enable);
-        break;
-    case VALVE_DA_ASR:
-        ASRRLowSideEnable(enable);
-        break;
-    default:
-        break;
-    }
-}
+/* 低边开关 (P2.0 前 ASR / P6.2 后 ASR) 不再由诊断切换: 上电在 Bts724g_Init() 中打开一次,
+ * 后续交由应用经 RTE 接口 ASRFLowSideSw / ASRRLowSideSw 控制 */
 
 /* ========================================================================== */
 /*  FAR 短路检测电路 (GPIO 读取)                                               */
@@ -312,6 +292,11 @@ void Bts724g_Init(void)
 
     ValveShort_Init();
     ValvePwm_Init();
+
+    /* 低边开关上电即开 (P2.0 前 ASR / P6.2 后 ASR): 为芯片线圈提供地通路。
+     * 诊断期间不再切换, 后续由应用经 RTE 接口 ASRFLowSideSw / ASRRLowSideSw 控制 */
+    ASRFLowSideEnable(1u);
+    ASRRLowSideEnable(1u);
 }
 
 /**
@@ -381,8 +366,9 @@ bool Bts724g_IsValveActive(valve_id_t valve_id)
 /* ========================================================================== */
 /*  诊断 — 阀开路检测 (单阀)                                                     */
 /*                                                                            */
-/*  有 partner: 开 partner → 读目标阀 ST → Low=正常, High=开路                 */
-/*  独占 ST:    开自身 → 读 ON 态 ST → Low=正常, 全 High=开路                    */
+/*  ST 开漏低有效: ST=High 正常, ST=Low = 无电流 = 开路                          */
+/*  有 partner: 开 partner → 读目标阀 OFF 态 ST → High=正常, Low=开路           */
+/*  独占 ST:    开自身   → 读 ON 态 ST        → High=正常, Low=开路             */
 /* ========================================================================== */
 static void Diag_ValveOpenOne(valve_id_t vid)
 {
@@ -393,30 +379,22 @@ static void Diag_ValveOpenOne(valve_id_t vid)
 
     if (partner >= VALVE_NUM_TOTAL)
     {
-        /* 独占 ST: 开自身 → 等 300μs → 读 ON 态 ST → Low=正常, High=开路 */
-        bts724g_asr_lowside_enable(vid, 1u);
-        Cy_SysTick_DelayInUs(LOWSIDE_SETTLE_US);
+        /* 独占 ST: 开自身 → 等 320μs → 读 ON 态 ST → High=正常, Low=开路 */
         Bts724g_SetValve(vid, true);
         Cy_SysTick_DelayInUs(VALVE_ON_SETTLE_US);
         is_fault = !Bts724g_ReadST(vid);  /* ST=Low → 无电流 → 开路 (BTS724G open-drain) */
         Bts724g_SetValve(vid, false);
-        bts724g_asr_lowside_enable(vid, 0u);
     }
     else
     {
-        /* 有 partner: 开 partner → 等 300μs → 读目标 OFF 态 ST → Low=正常, High=开路 */
+        /* 有 partner: 开 partner → 等 320μs → 读目标 OFF 态 ST → High=正常, Low=开路 */
         if (Bts724g_IsValveActive(partner)) return;
         if (g_bts724g_fault_status.bts724g_fault_short[partner]) return;
 
-        bts724g_asr_lowside_enable(vid, 1u);
-        bts724g_asr_lowside_enable(partner, 1u);
-        Cy_SysTick_DelayInUs(LOWSIDE_SETTLE_US);
         Bts724g_SetValve(partner, true);
         Cy_SysTick_DelayInUs(VALVE_ON_SETTLE_US);
         is_fault = !Bts724g_ReadST(vid);  /* OFF态 ST=Low → partner 电流未拉低 → 目标线圈断 */
         Bts724g_SetValve(partner, false);
-        bts724g_asr_lowside_enable(partner, 0u);
-        bts724g_asr_lowside_enable(vid, 0u);
     }
 
     /* 3 次上下计数消抖 */
@@ -461,15 +439,12 @@ static void Diag_ValveShortOne(valve_id_t vid)
         if (s_bts724g_valve_to_short_group[i] == grp)
             Bts724g_SetValve((valve_id_t)i, false);
 
-    bts724g_asr_lowside_enable(vid, 1u);
-    Cy_SysTick_DelayInUs(LOWSIDE_SETTLE_US);
     Bts724g_SetValve(vid, true);
     Cy_SysTick_DelayInUs(VALVE_ON_SETTLE_US);
 
     const bool is_fault = ValveShort_ReadGroup(grp);  /* FAR=High → 短路 */
 
     Bts724g_SetValve(vid, false);
-    bts724g_asr_lowside_enable(vid, 0u);
 
     /* 3 次上下计数消抖 */
     if (is_fault)
@@ -577,13 +552,7 @@ static void Diag_ChipShortOne(uint8_t chip)
             && g_bts724g_fault_status.bts724g_fault_type[v] == VALVE_FAULT_OPEN) return;
     }
 
-    /* 开低边: B 组芯片 (U12/U13/U19) 线圈地经低边, 必须开否则 OUT 浮空 */
-    if (grp == SHORT_GROUP_B)
-    {
-        ASRFLowSideEnable(1u);                    /* P2.0: U12/U19 + U13 的 FA_ASR */
-        if (chip == 3u) ASRRLowSideEnable(1u);    /* P6.2: U13 的 DA_ASR */
-        Cy_SysTick_DelayInUs(LOWSIDE_SETTLE_US);
-    }
+    /* 低边开关已常开 (B 组芯片线圈地经低边), 诊断期间不切换 */
 
     /* 全 IN=LOW (走 PWM) → 读 FAR → FAR=Low → 芯片内部短路 (FET 关不断, OUT 仍高) */
     for (uint8_t v = 0u; v < VALVE_NUM_TOTAL; v++)
@@ -594,13 +563,6 @@ static void Diag_ChipShortOne(uint8_t chip)
     }
     Cy_SysTick_DelayInUs(CHIP_SETTLE_US);
     const bool is_short = !ValveShort_ReadGroup(grp);  /* FAR=Low → 短路 */
-
-    /* 关低边 */
-    if (grp == SHORT_GROUP_B)
-    {
-        ASRFLowSideEnable(0u);
-        if (chip == 3u) ASRRLowSideEnable(0u);
-    }
 
     /* 5 次消抖 */
     static uint8_t s_chip_short_s[5] = {0}, s_chip_noshort_s[5] = {0};
@@ -629,6 +591,11 @@ static void Diag_ChipShortOne(uint8_t chip)
 /* ========================================================================== */
 void ValveDiag_Process(void)
 {
+    /* 阀测试模式 (RTEfValWssTestForbit=1, 上层阀/WSS 测试): 诊断整体让路 —— 不驱动任何阀,
+     * 也不开/关 P2.0、P6.2 低边 (低边由调用方 ASRFLowSideSw/ASRRLowSideSw 自行控制),
+     * 避免与上层的阀/低边测试互相踩踏。故障状态保持上次结果不变。 */
+    if (RTEfValWssTestForbit != 0u) return;
+
     if (PSWvIgn < 180u || PSWvIgn > 320u) return;
 
     s_call_count++;

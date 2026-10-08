@@ -2,9 +2,9 @@
  * @file    bts724g.h
  * @brief   BTS724G 五片阀驱动器 (IN 控制 + ST 回读 + 短路检测)
  *
- * @details 本模块同时处理诊断: ValveDiag_Process() 每 10ms 测试 1 个阀，
- *          覆盖全部 17 个空闲阀仅需 170ms。
- *          基于轮询: 每 ~1.25μs 读取 ST/FAR，5 次连续确认。
+ * @details 本模块同时处理诊断: ValveDiag_Process() 每 10ms 调用一次, 40ms 执行 1 步，
+ *          4 步轮转 (阀开路 → 阀短路 → 芯片开路 → 芯片短路), 每步测 1 个阀/芯片，
+ *          17 阀 × 2 步 + 5 芯片 × 2 步 = 44 步 ≈ 1.76s 全覆盖。
  *
  * @details 硬件连接 (5 片 BTS724G, 控制 17 个 24V 电磁阀):
  *
@@ -215,9 +215,14 @@ bool Bts724g_IsValveActive(valve_id_t valve_id);
 /**
  * @brief   阀诊断主函数 (非阻塞, 主循环每 10ms 调用一次)。
  *
- * @details 每 10ms 测试 1 个空闲阀。轮询 ~1.25μs/次, 每阶段最大 ~312μs。
- *          全部 17 个空闲阀覆盖只需 170ms。
- *          两次调用间的 10ms 间隔确保线圈充分放电。
+ * @details 每 40ms 执行 1 步 (4 步轮转: 阀开路 → 阀短路 → 芯片开路 → 芯片短路), 每步测 1 个阀/芯片。
+ *          每步驱动后延时稳定 (VALVE_ON_SETTLE_US) 再读一次 ST/FAR, 消抖靠跨步上下计数。
+ *          17 阀 × 2 步 + 5 芯片 × 2 步 = 44 步 ≈ 1.76s 全覆盖。
+ *
+ * @note    让路条件 (直接 return, 不驱动阀与低边):
+ *            1) RTEfValWssTestForbit != 0 (ASW 阀/WSS 测试模式, 低边归 ASW 控制)
+ *            2) PSWvIgn 不在 180~320 (继电器刚闭合/掉电, 测量无意义)
+ *          另外单阀/单芯片级还会检查 Bts724g_NotifyValveActive() 与故障守卫。
  */
 void ValveDiag_Process(void);
 
