@@ -577,7 +577,13 @@ void ValvePwm_SetDutyLive(valve_id_t valve_id, uint16_t period,
     }
 
     /* ③ 恢复原 counter → 相位连续 (超出新周期时下拍自动溢出, 等同从头开始) */
-    Cy_Tcpwm_Pwm_SetCounter(tcpwm, saved);
+    /* ⚠ saved 可能超出新周期(周期变小): 若原样写回, counter 会超出周期范围,
+     *   要数到 65535 才回绕(最长 655ms) → 期间不匹配 CC0/CC1 = 输出长时间不动,
+     *   现象即"没有方波" (2026-10-09 排气阀 State=0x12 实测确诊)。仅在新范围内恢复。 */
+    if (saved <= (uint32_t)period_reg)
+    {
+        Cy_Tcpwm_Pwm_SetCounter(tcpwm, saved);
+    }
     delay_us(PWM_STEP_US);
 }
 

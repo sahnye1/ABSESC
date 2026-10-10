@@ -183,9 +183,6 @@ uint32_t Gpio_ASRFLowSideSt(void);
 void     Gpio_ASRRLowSideSw(uint8_t sw);
 uint32_t Gpio_ASRRLowSideSt(void);
 
-/** @brief 低边开关引用计数使能 (前桥 P2.0 被 FA_ASR+TR_ASR 共享) */
-void Gpio_ASRFLowSideEnable(uint8_t enable);
-void Gpio_ASRRLowSideEnable(uint8_t enable);
 
 /** @brief 测试计时标记输出 — P22.0 (电路 LROCN, 后桥左排阀, TCPWM CNT34/LINE34)
  *  @note  测试用例需在接插件上量高低电平测时序 (10ms 节拍 / EEPROM 读写耗时 / 看门狗超时),

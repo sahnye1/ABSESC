@@ -98,8 +98,6 @@ void     ASRFLowSideSw(uint32_t sw)       { Gpio_ASRFLowSideSw(sw); }
 uint32_t ASRFLowSideSt(void)              { return Gpio_ASRFLowSideSt(); }
 void     ASRRLowSideSw(uint8_t sw)        { Gpio_ASRRLowSideSw(sw); }
 uint32_t ASRRLowSideSt(void)             { return Gpio_ASRRLowSideSt(); }
-void     ASRFLowSideEnable(uint8_t e)     { Gpio_ASRFLowSideEnable(e); }
-void     ASRRLowSideEnable(uint8_t e)     { Gpio_ASRRLowSideEnable(e); }
 
 /* ========================================================================== */
 /*  ABS 阀控制                                                                 */
@@ -165,8 +163,8 @@ void RtePsw_VersionInit(void)
 {
     RTEPSW_Version[0] = 0x01u;   /* 底层01*/
     RTEPSW_Version[1] = 0x26u;   /* 年低位 26 → 2026 */
-    RTEPSW_Version[2] = 0x09u;   /* 月 */
-    RTEPSW_Version[3] = 0x29u;   /* 日 */
+    RTEPSW_Version[2] = 0x10u;   /* 月 */
+    RTEPSW_Version[3] = 0x10u;   /* 日 */
     RTEPSW_Version[4] = 0x01u;   /* 当天第 1 次修改 */
 }
 
