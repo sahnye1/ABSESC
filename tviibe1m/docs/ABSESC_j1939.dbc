@@ -5147,6 +5147,22 @@ BO_ 2365433598 VREP: 8 Vector__XXX
 
 
 
+BO_ 1826 TEST_RBS_722: 8 Vector__XXX
+ SG_ WssToothCntFL : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothCntFR : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothCntRL : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothCntRR : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothCntXL : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothCntXR : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 1827 TEST_RBS_723: 8 Vector__XXX
+ SG_ WssToothRatioFL : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothRatioFR : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothRatioRL : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothRatioRR : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothRatioXL : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ WssToothRatioXR : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+
 CM_ BU_ HitchControl "Straight truck hitch (NOT Agricultural hitch � it is in IG 2) ";
 CM_ BO_ 3221225472 "This is a message for not used signals, created by Vector CANdb++ DBC OLE DB Provider.";
 CM_ SG_ 3221225472 TrailerWeight "Total mass of freight-carrying vehicle designed to be pulled by truck, including the weight of the contents.";
