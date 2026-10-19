@@ -533,6 +533,12 @@ void ValvePwm_SetDutyLive(valve_id_t valve_id, uint16_t period,
     {
         return;                             /* 参数未变: 连相位也不该动 */
     }
+
+    /* 记录"改前"参数 (用于判断当前输出是否在高电平段), 再覆盖缓存 */
+    const bool     old_valid = s_duty_valid[valve_id];
+    const uint16_t old_cc0   = s_duty_cc0[valve_id];
+    const uint32_t old_cc1   = (uint32_t)s_duty_cc0[valve_id] + (uint32_t)s_duty_htime[valve_id];
+
     ValvePwm_DutyCacheSave(valve_id, period, cc0_start, high_time);
 
     const uint16_t period_reg = (uint16_t)(period - 1u);
@@ -552,9 +558,33 @@ void ValvePwm_SetDutyLive(valve_id_t valve_id, uint16_t period,
         cc1 = (uint16_t)(period_reg + 1u);  /* 超出周期 → 恒高, 永不匹配 CLEAR */
     }
 
-    /* ① 记录原相位 + 写新参数 + 强制溢出建立基态 */
+    /* ① 记录原相位 */
     const uint32_t saved = Cy_Tcpwm_Pwm_GetCounter(tcpwm);
 
+    /* ★ 2026-10-19 改占空比分两种情况 (同 RBS):
+     *   - 改前【高电平已走完】(低电平段) → 本周期不干预, 新参数**下周期**生效
+     *   - 改前【高电平未走完】(高电平段) → **立即生效** (更短=截断, 更长=延续到新终点)
+     *   ⚠ 缓存无效(首次/SetOnOff 之后) → 按"高电平段"处理 (保持原行为) */
+    const bool was_high = (old_valid == false) ||
+                          ((saved >= (uint32_t)old_cc0) && (saved < old_cc1));
+
+    if (was_high == false)
+    {
+        /* 情况1: 低电平段 → 只写新参数, 不动 counter (本周期高电平已过) */
+        Cy_Tcpwm_Pwm_SetPeriod(tcpwm, (uint32_t)period_reg);
+        Cy_Tcpwm_Pwm_SetCompare1(tcpwm, (uint32_t)cc1);
+        Cy_Tcpwm_Pwm_SetCompare0(tcpwm, (uint32_t)cc0_start);
+
+        /* 仅当周期变小导致 counter 超出新周期时才强制溢出 (防 65535 长死区) */
+        if (saved > (uint32_t)period_reg)
+        {
+            Cy_Tcpwm_Pwm_SetCounter(tcpwm, (uint32_t)period_reg);
+            delay_us(PWM_STEP_US);
+        }
+        return;
+    }
+
+    /* 情况2: 高电平段 → 写新参数 + 强制溢出建立基态 (旧周期在此终止) */
     Cy_Tcpwm_Pwm_SetPeriod(tcpwm, (uint32_t)period_reg);
     Cy_Tcpwm_Pwm_SetCompare1(tcpwm, (uint32_t)cc1);
     Cy_Tcpwm_Pwm_SetCompare0(tcpwm, (uint32_t)cc0_start);
