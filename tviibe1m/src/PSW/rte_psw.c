@@ -164,7 +164,7 @@ void RtePsw_VersionInit(void)
     RTEPSW_Version[0] = 0x01u;   /* 底层01*/
     RTEPSW_Version[1] = 0x26u;   /* 年低位 26 → 2026 */
     RTEPSW_Version[2] = 0x10u;   /* 月 */
-    RTEPSW_Version[3] = 0x19u;   /* 日 */
+    RTEPSW_Version[3] = 0x27u;   /* 日 */
     RTEPSW_Version[4] = 0x01u;   /* 当天第 1 次修改 */
 }
 
