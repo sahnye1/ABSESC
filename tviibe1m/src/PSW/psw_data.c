@@ -13,7 +13,7 @@
 #include "wheel_speed.h"
 
 /* ========================================================================== */
-/*  常量                                                                       */
+/*  1. 常量                                                                     */
 /* ========================================================================== */
 
 
@@ -21,7 +21,7 @@
 #define VEHICLE_MODE_4S4M     0u       /* 4S4M 模式 */
 
 /* ========================================================================== */
-/*  PSW* 中间变量定义                                                          */
+/*  2. PSW* 中间变量定义                                                        */
 /* ========================================================================== */
 
 /* ---- 核心数值 ---- */
@@ -92,8 +92,11 @@ uint8_t  PSWfErrEEpromOutBnd = 0u;
 uint32_t resetReason;     //模块重启的原因
 
 /* ========================================================================== */
-/*  PSWData_Refresh() — 从各驱动读取内部状态, 填充 PSW* 中间变量                 */
+/*  3. 数据刷新与 RTE 同步                                                       */
 /* ========================================================================== */
+/** @brief 从各驱动读取内部状态, 填充 PSW* 中间变量
+ *  @note  每 10ms 调用一次 (轮速/ADC/阀故障/EEPROM/继电器等)
+ */
 void PSWData_Refresh(void)
 {
     /* ---- 1. VPOWER 电压 (adc, P7.2 AN10, 继电器后) ---- */
@@ -209,8 +212,11 @@ void PSWData_Refresh(void)
 }
 
 /* ========================================================================== */
-/*  PSWDataToRte() — 从 PSW* 中间变量读取, 验证后写入 RTE                        */
+/*  3.2 RTE 同步                                                                */
 /* ========================================================================== */
+/** @brief 从 PSW* 中间变量读取, 验证后写入 RTE (供 COM/ASW 使用)
+ *  @note  必须在 PSWData_Refresh() 之后调用
+ */
 void PSWDataToRte(void)
 {
     const bool vpwr_ok = (PSWvIgn >= 180u && PSWvIgn <= 320u);
@@ -240,25 +246,9 @@ void PSWDataToRte(void)
         RTEBrkPreX4_14  = (err_front != 0u) ? DATA_INVALID : PSWBrkPreX2_7;
         RTEBrkPreX4_15 = (err_rear  != 0u) ? DATA_INVALID : PSWBrkPreX3_10;
 
-        // /* 前/后桥压力故障映射 (根据 RTEfPressCfg) */
-        // switch (RTEfPressCfg)
-        // {
-        // case 0u: case 1u:
-        //     RTEfPSWErr.RTEfErrPreF = err_front;
-        //     RTEfPSWErr.RTEfErrPreR = err_front;  break;
-        // case 2u: case 3u:
-        //     RTEfPSWErr.RTEfErrPreF = err_rear;
-        //     RTEfPSWErr.RTEfErrPreR = err_rear;   break;
-        // case 4u:
-        //     RTEfPSWErr.RTEfErrPreF = err_front;
-        //     RTEfPSWErr.RTEfErrPreR = err_rear;   break;
-        // case 5u:
-        //     RTEfPSWErr.RTEfErrPreF = err_rear;
-        //     RTEfPSWErr.RTEfErrPreR = err_front;  break;
-        // default:
-        //     RTEfPSWErr.RTEfErrPreF = err_front;
-        //     RTEfPSWErr.RTEfErrPreR = err_rear;   break;
-        // }
+        /* 前/后桥压力故障的映射不在本层:
+         * 映射依据 RTEfPressCfg 由 COM 层完成; 本层只上报口级:
+         * RTEBrkPreX4_14/15 + RTEfErrPreX4_14/15。 */
     }
     else
     {

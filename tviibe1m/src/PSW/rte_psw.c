@@ -1,11 +1,12 @@
 /**
  * @file    rte_psw.c
- * @brief   RTE PSW 层实现 — 驾驶室版
+ * @brief   RTE PSW 层实现 — 驾驶室版 (阀控 / 低边 / EEPROM / 桩函数)
  *
- * @details 17 阀 → BTS724G + ValvePwm 映射, RTE 0.1ms → 10μs/步换算。
- *          PWM 双比较模式: CC0→SET(起点) CC1→CLEAR(终点) overflow→CLEAR(基态)
- *          进气阀(后段高): CC0=period-htime, CC1=period
- *          排气/ASR(前段高): CC0=0(周期起点), CC1=htime
+ * @details 阀控: 17 阀 → BTS724G + ValvePwm; RTE 层单位 0.1ms, ValvePwm 步长 10μs
+ *          (1 个 RTE 单位 = 10 步; RTE 周期上限 5000 = 500ms)
+ *          双比较: CC0→SET(起点) CC1→CLEAR(终点) overflow→CLEAR(基态)
+ *            进气阀 (后段高): CC0 = period - htime
+ *            排气阀 (前段高): CC0 = 0 (周期起点)
  */
 
 #include "RTE.h"
@@ -17,7 +18,7 @@
 #include <string.h>
 
 /* ========================================================================== */
-/*  常量与宏                                                                   */
+/*  1. 常量与宏                                                                 */
 /* ========================================================================== */
 
 /* RTE 0.1ms → ValvePwm 10μs 步数 */
@@ -25,6 +26,10 @@
 
 /* RTE 层周期上限 (单位 0.1ms): 5000 = 500ms */
 #define RTE_PERIOD_MAX           5000u
+
+/* ========================================================================== */
+/*  2. 内部辅助函数                                                             */
+/* ========================================================================== */
 
 /** @brief RTE 阀控参数钳位 (上限 / 非法关阀 / 占空比钳位)
  *  @note  无钳位时 htime > period 会使 cc0_start 下溢成大数 → 底层直接 return
@@ -35,14 +40,6 @@ static void Psw_ValActClamp(uint16_t *period, uint16_t *htime)
     if (*period == 0u)            { *period = 1u; *htime = 0u; }  /* 非法 → 关阀 */
     else if (*htime > *period)    { *htime  = *period; }          /* 占空比钳位 */
 }
-
-/* ========================================================================== */
-/*  全局/静态状态                                                              */
-/* ========================================================================== */
-
-/* ========================================================================== */
-/*  内部辅助函数                                                               */
-/* ========================================================================== */
 
 /** @brief 进气阀 PWM (后段高, LOW→HIGH): CC0=period-htime, CC1=period */
 static void Psw_InValAct(valve_id_t vid, uint16_t period, uint16_t htime)
@@ -91,7 +88,7 @@ static void Psw_OutValAct(valve_id_t vid, uint16_t period, uint16_t htime)
 }
 
 /* ========================================================================== */
-/*  ASR 低边开关 (委托 gpio.c 实现)                                            */
+/*  3. ASR 低边开关 (委托 gpio.c 实现)                                          */
 /* ========================================================================== */
 
 void     ASRFLowSideSw(uint32_t sw)       { Gpio_ASRFLowSideSw(sw); }
@@ -100,7 +97,7 @@ void     ASRRLowSideSw(uint8_t sw)        { Gpio_ASRRLowSideSw(sw); }
 uint32_t ASRRLowSideSt(void)             { return Gpio_ASRRLowSideSt(); }
 
 /* ========================================================================== */
-/*  ABS 阀控制                                                                 */
+/*  4. ABS 阀控制 (6 轮 × 进/排气)                                              */
 /* ========================================================================== */
 
 void InValActFL(uint16_t period, uint16_t htime) { Psw_InValAct(VALVE_LFI, period, htime); }
@@ -125,7 +122,7 @@ void InValActTr(uint16_t period, uint16_t htime) { Psw_InValAct(VALVE_TRFIN, per
 void OutValActTr(uint16_t period, uint16_t htime) { Psw_OutValAct(VALVE_TRFOUT, period, htime); }
 
 /* ========================================================================== */
-/*  ASR 阀控制                                                               */
+/*  5. ASR 阀控制                                                               */
 /* ========================================================================== */
 
 void ASRValActF(uint16_t period, uint16_t htime) { Psw_OutValAct(VALVE_FA_ASR, period, htime); }
@@ -133,7 +130,7 @@ void ASRValActR(uint16_t period, uint16_t htime) { Psw_OutValAct(VALVE_DA_ASR, p
 void ASRValActX(uint16_t period, uint16_t htime) { Psw_OutValAct(VALVE_TR_ASR, period, htime); }
 
 /* ========================================================================== */
-/*  继电器 / UB / 接插件引脚 (委托 gpio.c 实现)                                */
+/*  6. 继电器 / UB / 指示灯 / 接插件引脚 (委托 gpio.c 实现)                     */
 /* ========================================================================== */
 
 void RelayCtrl(uint8_t state)       { Gpio_RelayCtrl(state); }
@@ -144,7 +141,7 @@ void X1_15_staSet(uint8_t setValue) { Gpio_ABSWLampCtrl(setValue); }
 int8_t Xn_pin_StaGet(uint8_t xNum, uint8_t xPin) { return Gpio_Xn_pin_StaGet(xNum, xPin); }
 
 /* ========================================================================== */
-/*  版本信息                                                                   */
+/*  7. 版本信息                                                                 */
 /* ========================================================================== */
 
 /**
@@ -179,7 +176,7 @@ uint8_t psw_version_get(uint8_t *verStr, uint8_t bufLen)
 }
 
 /* ========================================================================== */
-/*  EEPROM 读写 (5 分区: ERR_CODE / ASW / PSW / COM / BOOT)                    */
+/*  8. EEPROM 读写 (5 分区: ERR_CODE / ASW / PSW / COM / BOOT)                  */
 /*                                                                            */
 /*  故障上报下沉到 eeprom.c Eeprom_Write/Read, 本层纯薄封装                     */
 /* ========================================================================== */
@@ -210,7 +207,7 @@ uint32_t BOOT_cfg_read(uint32_t rAddr, uint8_t *buf, uint32_t len)
     { return Eeprom_Read(EEPROM_BOOT_BASE, rAddr, buf, len, EEPROM_BOOT_SIZE); }
 
 /* ========================================================================== */
-/*  SCC3000 (ESC 传感器) 桩函数 — 已废弃                                        */
+/*  9. SCC3000 (ESC 传感器) 桩函数 — 已废弃                                     */
 /*                                                                            */
 /*  SCC3000/IMU 驱动不在本工程范围, ESC 传感器数据 (YawRate/LatAcc/LongiAcc 等) */
 /*  由外部模块负责。此处仅为满足 COM 层链接提供桩函数。                           */
@@ -239,6 +236,10 @@ uint8_t SCC3000_Err(void)
 {
     return 0u;
 }
+
+/* ========================================================================== */
+/*  10. ECU 类型                                                                */
+/* ========================================================================== */
 
 /** @brief 获取 ECU 类型 (桩: 恒返回 0 = 驾驶室版, 待后续按配置实现) */
 uint8_t get_ECU_type(void)

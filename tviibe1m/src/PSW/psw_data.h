@@ -1,10 +1,9 @@
 /**
  * @file    psw_data.h
- * @brief   PSW 中间变量层 — 驱动 → PSW* → RTE* 数据转发
+ * @brief   PSW 中间变量层 — 驱动 → PSW* → RTE*
  *
- * @details 各驱动模块写入 PSW* 中间变量, PSWDataToRte() 统一读取
- *          PSW* 并填充 RTE* 全局变量 (含数据验证/掩蔽)。
- *          BSWdebug 测试用例可直接读取 PSW* 变量。
+ * @details 各驱动写 PSW*; PSWData_Refresh() 汇总, PSWDataToRte() 校验/掩蔽后写 RTE*。
+ *          PSWdebug 测试用例可直接读 PSW*。
  */
 
 #ifndef PSW_DATA_H
@@ -30,7 +29,7 @@ extern uint8_t  PSWfErrPreX2_7;      /* X2_7脚压力故障, 0=正常 1=故障 *
 extern uint8_t  PSWfErrPreX3_10;     /* X3_10脚压力故障 */
 
 /* ========================================================================== */
-/*  轮速 (0.1km/h)                                                             */
+/*  轮速 (mm/s)   [2026-09-28 按代码订正: psw_data.c 直传, 无 0.1km/h→mm/s 换算]                                                            */
 /* ========================================================================== */
 
 extern uint16_t PSWWheelSpeedFL;
