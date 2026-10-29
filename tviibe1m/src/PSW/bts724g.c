@@ -177,9 +177,6 @@ static volatile bool s_valve_active[VALVE_NUM_TOTAL] = { false };
 static uint8_t s_open_candidate_count[VALVE_NUM_TOTAL]  = {0};
 static uint8_t s_short_candidate_count[VALVE_NUM_TOTAL] = {0};
 
-/* 诊断步进计数器 */
-static uint32_t s_call_count = 0u;
-
 /* ========================================================================== */
 /*  内部辅助函数                                                               */
 /* ========================================================================== */
@@ -582,7 +579,7 @@ static void Diag_ChipShortOne(uint8_t chip)
 }
 
 /* ========================================================================== */
-/*  诊断主入口 (每 10ms 调用一次, 40ms 执行 1 步, 4 步轮转)                       */
+/*  诊断主入口 (每 10ms 调用执行 1 步, 4 步轮转)                                  */
 /*                                                                            */
 /*  4 步轮转: 开路 → 短路 → 芯片开路 → 芯片短路                                  */
 /*  每步只测 1 个阀/芯片, 带 3 次对称消抖                                         */
@@ -595,9 +592,6 @@ void ValveDiag_Process(void)
     if (RTEfValWssTestForbit != 0u) return;
 
     if (PSWvIgn < 180u || PSWvIgn > 320u) return;
-
-    s_call_count++;
-    if (s_call_count & 3u) return;   /* 每 4 次 (40ms) 执行 1 步 */
 
     static uint8_t s_step = 0u;
     static valve_id_t s_open_vid  = VALVE_RRI;
