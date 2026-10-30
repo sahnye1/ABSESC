@@ -22,7 +22,6 @@
 #define GPIO_H
 
 #include "gpio/cy_gpio.h"
-#include "hw_rev.h"
 
 /* ========================================================================== */
 /*  继电器控制 (RelayCtrl)                                                      */
@@ -148,7 +147,7 @@ void wd_feed(void);
 
 /** @brief X1-9 接插件第9脚, 10ms 定时器节拍测试输出
  *
- *  @note  当前硬件未分配该测试点 (hw_rev.h 中无对应引脚宏), 故暂用空实现宏,
+ *  @note  当前硬件未分配该测试点 (adc.h 中无对应引脚宏), 故暂用空实现宏,
  *         避免 BSWdebug 测试用例报 "declared implicitly" 警告 + 链接缺符号。
  *         将来接线后: 在 gpio.c 实现该函数, 并把本宏改回函数声明
  *         `void CtrlX1_9(uint8_t state);` */
