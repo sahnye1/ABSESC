@@ -672,11 +672,11 @@ void ValveDiag_Process(void)
 
 /* ========================================================================== */
 /*  13. 调试支持                                                               */
+/*    由 PSWdebug 的 UDS 编号 0xB8 激活, 不再是编译开关 (勿删, 发布版保留)        */
 /* ========================================================================== */
-#if (VALVE_DIAG_DEBUG != 0u)
 volatile valve_diag_debug_t g_valve_diag_debug = {0};
 
-/** @brief 输出阀诊断明细 (仅 VALVE_DIAG_DEBUG 调试用)
+/** @brief 输出阀诊断明细 (由 UDS 编号 0xB8 激活)
  */
 void ValveDiag_DebugDump(void)
 {
@@ -688,4 +688,3 @@ void ValveDiag_DebugDump(void)
         g_valve_diag_debug.active[i] = Bts724g_IsValveActive((valve_id_t)i) ? 1u : 0u;
     }
 }
-#endif

@@ -5954,13 +5954,10 @@
                 <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\PSWdebug.h</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\test_cfg.h</name>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\PSWoem.c</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\test_deal.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\test_deal.h</name>
+                <name>$PROJ_DIR$\..\..\..\..\src\PSW\test\PSWoem.h</name>
             </file>
         </group>
 
