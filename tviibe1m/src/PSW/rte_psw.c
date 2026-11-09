@@ -44,6 +44,9 @@ static void Psw_ValActClamp(uint16_t *period, uint16_t *htime)
 /** @brief 进气阀 PWM (后段高, LOW→HIGH): CC0=period-htime, CC1=period */
 static void Psw_InValAct(valve_id_t vid, uint16_t period, uint16_t htime)
 {
+    /* OEM 模式 (RTEfTestMode == 2): 阀由 PSWoem 接管, 屏蔽 ASW 层控阀 */
+    if (RTEfTestMode == 2u) { return; }
+
     if (vid >= VALVE_NUM_TOTAL) return;
 
     Psw_ValActClamp(&period, &htime);
@@ -68,6 +71,9 @@ static void Psw_InValAct(valve_id_t vid, uint16_t period, uint16_t htime)
 /** @brief 排气/ASR 阀 PWM (前段高, HIGH→LOW): CC0=OFFSET(0, 周期起点), CC1=htime */
 static void Psw_OutValAct(valve_id_t vid, uint16_t period, uint16_t htime)
 {
+    /* OEM 模式 (RTEfTestMode == 2): 阀由 PSWoem 接管, 屏蔽 ASW 层控阀 */
+    if (RTEfTestMode == 2u) { return; }
+
     if (vid >= VALVE_NUM_TOTAL) return;
 
     Psw_ValActClamp(&period, &htime);
