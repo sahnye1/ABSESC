@@ -150,6 +150,13 @@ cy_stc_canfd_config_t canCfg1 =
 		.timeSegment2   = 4u - 1u,  // tseg2 = 4tq
 		.syncJumpWidth  = 4u - 1u,  // sjw   = 4tq (= tseg2 上限)
 	},
+	/* 493.8k (测试用, 保留备查):
+	 *   .prescaler      = 3u - 1u,  // 40MHz/3 = 13.33MHz, 1tq = 75ns
+	 *   .timeSegment1   = 20u - 1u, // tseg1 = 20tq
+	 *   .timeSegment2   = 6u - 1u,  // tseg2 = 6tq
+	 *   .syncJumpWidth  = 6u - 1u,  // sjw   = 6tq
+	 *   // NBT=27 → 40M/(3×27) = 493.827kbps, 采样点 77.8%
+	 */
 	.globalFilterConfig =   // Global filter
 	{
 		.nonMatchingFramesStandard = CY_CANFD_REJECT_NON_MATCHING,  // Reject none match IDs
